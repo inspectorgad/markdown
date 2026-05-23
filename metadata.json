@@ -1,0 +1,6 @@
+{
+  "name": "Markdown Editor",
+  "description": "A minimalist, WISIWYG Markdown editor modeled after Typora with full desktop shortcut support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
