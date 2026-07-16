@@ -1,0 +1,7 @@
+URL: https://www.professionalsoftballleague.com/standings
+HTTP: 404
+
+ERROR: PAGE NOT FOUND
+404
+This page isn’t available.
+Go to Homepage
