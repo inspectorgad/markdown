@@ -1,6 +1,3 @@
-URL: https://thekcdiamonds.com/schedule/past-games-results
-HTTP: 200
-
 ABOUT
 SCHEDULE/TICKETS
 NEWS
@@ -14,6 +11,16 @@ PAST GAMES & RESULTS
 
 All times listed in Central Standard Time (CST)
 Legends Field - 1800 Village West Pkwy, Kansas City, KS 66111
+
+Wed
+
+Jul 15, 2026 6:35 PM
+VS.
+ST. LOUIS GATEWAY GOLD
+
+Legends Field | Kansas City, KS
+
+Girl Scout Day
 
 Tue
 

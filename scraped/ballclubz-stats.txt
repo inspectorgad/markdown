@@ -1,6 +1,3 @@
-URL: https://www.ballclubz.com/kcdiamonds/stats
-HTTP: 200
-
 KC Diamonds
 Stats
 Batting Statistics

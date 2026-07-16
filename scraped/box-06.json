@@ -1,0 +1,5 @@
+{
+  "url": "https://www.ballclubz.com/kcdiamonds/live/2b43179",
+  "wrap": "KC Diamonds\n0\nFlorida Vibe\n0\n0 - 0\n0 out\nThis game is not available.\nIt either has not started or is not being scored live",
+  "box": "BOX TAB ERROR: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByText('BOX', { exact: true }).first()\n"
+}
