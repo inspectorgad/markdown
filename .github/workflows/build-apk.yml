@@ -20,7 +20,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.2.0'
+          gradle-version: '9.3.1'
 
       # The debug signing keystore is stored base64-encoded in the repo;
       # the build expects it at ${rootDir}/debug.keystore.
