@@ -1,0 +1,7 @@
+{
+  "id": "2b7b59b",
+  "url": "https://www.ballclubz.com/kcdiamonds/live/2b7b59b",
+  "wrap": "KC Diamonds\n0\nSt Louis Gatekeepers\n0\n0 - 0\n0 out\nThis game is not available.\nIt either has not started or is not being scored live",
+  "boxAway": "BOX TAB ERROR: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByText('BOX', { exact: true }).first()\n",
+  "boxKC": ""
+}
