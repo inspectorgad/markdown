@@ -1,16 +1,41 @@
 {
-  "_comment": "Seed data loaded once on first launch, only if the database is empty. Roster: KC Diamonds (Professional Softball League, 2026 inaugural season), as confirmed from public reporting July 2026. Add games as {date, opponent, season, teamScore, opponentScore, lines:[{player, ab, r, h, 2b, 3b, hr, rbi, bb, so, hbp, sf, sb}]}.",
+  "_comment": "Seed data loaded once on first launch, only if the database is empty. Roster and schedule scraped from thekcdiamonds.com (official site) July 2026. Games listed without scores are upcoming at seed time - fill in scores and per-player lines in the app after each game. Line format: {player, ab, r, h, 2b, 3b, hr, rbi, bb, so, hbp, sf, sb}.",
   "players": [
-    { "name": "Leah Boggs", "position": "C" },
-    { "name": "Savanah Henley", "position": "P" },
-    { "name": "Laurin Krings", "position": "P" },
-    { "name": "Jori Heard", "position": "P" },
-    { "name": "Ava Kuszak", "position": "SS" },
-    { "name": "Hailey Cripe", "position": "IF" },
-    { "name": "Alexis Hastings", "position": "" },
-    { "name": "Cori McMillan", "position": "" },
-    { "name": "Lauren Lucas", "position": "OF" },
-    { "name": "Stefani Smith", "position": "" }
+    { "name": "Autumn Owen", "jerseyNumber": "00", "position": "UTL" },
+    { "name": "Cori McMillan", "jerseyNumber": "2", "position": "OF" },
+    { "name": "Ava Kuszak", "jerseyNumber": "7", "position": "INF" },
+    { "name": "Leah Boggs", "jerseyNumber": "8", "position": "C/UTL" },
+    { "name": "Jori Heard", "jerseyNumber": "13", "position": "RHP" },
+    { "name": "Alexis Hastings", "jerseyNumber": "14", "position": "OF" },
+    { "name": "Rachel Roupe", "jerseyNumber": "15", "position": "OF" },
+    { "name": "Presleigh Pilon", "jerseyNumber": "16", "position": "INF" },
+    { "name": "Hope Valdespino", "jerseyNumber": "21", "position": "RHP" },
+    { "name": "Savanah Henley", "jerseyNumber": "22", "position": "LHP" },
+    { "name": "Laurin Krings", "jerseyNumber": "24", "position": "RHP" },
+    { "name": "Alex Brown", "jerseyNumber": "25", "position": "INF/UTL" },
+    { "name": "Riley Blampied", "jerseyNumber": "26", "position": "C/UTL" },
+    { "name": "Lauren Lucas Thornhill", "jerseyNumber": "28", "position": "OF" },
+    { "name": "Hailey Cripe", "jerseyNumber": "41", "position": "UTL/INF" },
+    { "name": "Kasey Ricard", "jerseyNumber": "77", "position": "RHP" },
+    { "name": "Allie Skaggs", "jerseyNumber": "99", "position": "INF" },
+    { "name": "Kylie Aldridge", "jerseyNumber": "", "position": "" },
+    { "name": "Stefani Smith", "jerseyNumber": "", "position": "" }
   ],
-  "games": []
+  "games": [
+    { "date": "2026-07-15", "opponent": "St. Louis Gateway Gold", "season": "2026" },
+    { "date": "2026-07-16", "opponent": "St. Louis Gateway Gold", "season": "2026" },
+    { "date": "2026-07-17", "opponent": "China National Team", "season": "2026" },
+    { "date": "2026-07-18", "opponent": "China National Team", "season": "2026" },
+    { "date": "2026-07-19", "opponent": "Florida Vibe", "season": "2026" },
+    { "date": "2026-07-20", "opponent": "Florida Vibe", "season": "2026" },
+    { "date": "2026-07-21", "opponent": "Florida Vibe", "season": "2026" },
+    { "date": "2026-07-23", "opponent": "Atlanta Smoke", "season": "2026" },
+    { "date": "2026-07-24", "opponent": "Atlanta Smoke", "season": "2026" },
+    { "date": "2026-07-25", "opponent": "Atlanta Smoke", "season": "2026" },
+    { "date": "2026-07-26", "opponent": "Atlanta Smoke", "season": "2026" },
+    { "date": "2026-07-29", "opponent": "St. Louis Gateway Gold", "season": "2026" },
+    { "date": "2026-07-30", "opponent": "St. Louis Gateway Gold", "season": "2026" },
+    { "date": "2026-07-31", "opponent": "St. Louis Gateway Gold", "season": "2026" },
+    { "date": "2026-08-01", "opponent": "St. Louis Gateway Gold", "season": "2026" }
+  ]
 }
