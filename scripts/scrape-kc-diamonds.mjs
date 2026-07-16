@@ -1,7 +1,6 @@
-// Scrapes public KC Diamonds / Professional Softball League pages using a real
-// headless browser (runs in GitHub Actions, where outbound network is open).
-// Saves rendered text, HTML, and full-page screenshots under scraped/ so the
-// results can be parsed into the app's seed data.
+// Scrapes public KC Diamonds pages using a real headless browser (runs in
+// GitHub Actions, where outbound network is open). Saves rendered text, HTML,
+// and screenshots under scraped/ so the results can be parsed into seed data.
 import { chromium } from 'playwright';
 import fs from 'fs';
 
@@ -15,16 +14,15 @@ const context = await browser.newContext({
   viewport: { width: 1400, height: 2400 },
 });
 
-async function scrapePage(name, url, { scroll = false, saveHtml = true } = {}) {
+async function scrapePage(name, url, { scroll = true, saveHtml = true } = {}) {
   const page = await context.newPage();
   try {
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForTimeout(6_000);
     if (scroll) {
-      // Trigger lazy-loaded content.
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 8; i++) {
         await page.evaluate(() => window.scrollBy(0, 1500));
-        await page.waitForTimeout(1_500);
+        await page.waitForTimeout(1_200);
       }
     }
     const status = resp ? resp.status() : 0;
@@ -33,50 +31,43 @@ async function scrapePage(name, url, { scroll = false, saveHtml = true } = {}) {
     if (saveHtml) fs.writeFileSync(`scraped/${name}.html`, await page.content());
     await page.screenshot({ path: `scraped/${name}.png`, fullPage: true });
     console.log(`${name}: HTTP ${status}, ${text.length} chars of text`);
-    return page; // caller must close
   } catch (e) {
     fs.writeFileSync(`scraped/${name}.txt`, `URL: ${url}\nERROR: ${e.message}`);
     console.log(`${name}: ERROR ${e.message}`);
-    return page;
   }
+  return page; // caller must close
 }
 
-// --- Team news: crawl the list page, then every article (game recaps live here).
-{
-  const page = await scrapePage('team-news', 'https://thekcdiamonds.com/news', { scroll: true });
-  let links = [];
+// The pages that matter: past results, the BallClubz stats platform, and news.
+const TARGETS = [
+  ['past-results', 'https://thekcdiamonds.com/schedule/past-games-results'],
+  ['ballclubz-stats', 'https://www.ballclubz.com/kcdiamonds/stats'],
+  ['ballclubz-live', 'https://www.ballclubz.com/kcdiamonds/live/2b7aa5e'],
+  ['news-media', 'https://thekcdiamonds.com/news-media/news-media'],
+];
+
+const discovered = new Set();
+for (const [name, url] of TARGETS) {
+  const page = await scrapePage(name, url);
   try {
-    links = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('a[href]'))
-        .map((a) => a.href)
-        .filter((h) => /thekcdiamonds\.com\/(news|post|blog)\/.+/i.test(h))
+    const links = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('a[href]')).map((a) => a.href)
     );
+    for (const h of links) {
+      // Follow anything that looks like a game page, box score, or news article.
+      if (/ballclubz\.com\/kcdiamonds\/(?!stats$)[a-z0-9/_-]+/i.test(h)) discovered.add(h.split('#')[0]);
+      if (/thekcdiamonds\.com\/(news|post|blog|news-media)\/.+/i.test(h)) discovered.add(h.split('#')[0]);
+    }
   } catch {}
   await page.close();
-  const unique = [...new Set(links)].slice(0, 30);
-  console.log(`Found ${unique.length} news article links`);
-  let i = 0;
-  for (const url of unique) {
-    const p = await scrapePage(`news-${String(i++).padStart(2, '0')}`, url, { saveHtml: false });
-    await p.close();
-  }
 }
 
-// --- League statistics page, with scrolling in case tables lazy-load.
-{
-  const p1 = await scrapePage('league-statistics', 'https://www.professionalsoftballleague.com/statistics', { scroll: true });
-  await p1.close();
-}
-
-// --- Reference pages (roster/schedule) so each scrape run stays current.
-for (const [name, url] of [
-  ['team-schedule', 'https://thekcdiamonds.com/schedule/schedule'],
-  ['team-roster', 'https://thekcdiamonds.com/about/meet-the-team'],
-  ['league-schedule', 'https://www.professionalsoftballleague.com/schedule'],
-]) {
-  const p = await scrapePage(name, url);
+let i = 0;
+for (const url of [...discovered].slice(0, 40)) {
+  const p = await scrapePage(`sub-${String(i++).padStart(2, '0')}`, url, { saveHtml: false });
   await p.close();
 }
+fs.writeFileSync('scraped/discovered-links.txt', [...discovered].join('\n'));
 
 await browser.close();
 console.log('Done. Files in scraped/:', fs.readdirSync('scraped').join(', '));
