@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.DiamondsDatabase
 import com.example.data.Game
 import com.example.data.Player
+import com.example.data.Seeder
 import com.example.data.StatLine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,11 @@ import kotlinx.coroutines.launch
 class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val dao = DiamondsDatabase.get(app).dao()
+
+    init {
+        // First launch only: load the bundled KC Diamonds roster/game data.
+        viewModelScope.launch { Seeder.seedIfEmpty(app, dao) }
+    }
 
     val players: StateFlow<List<Player>> = dao.observePlayers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

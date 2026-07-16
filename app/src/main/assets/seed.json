@@ -1,0 +1,16 @@
+{
+  "_comment": "Seed data loaded once on first launch, only if the database is empty. Roster: KC Diamonds (Professional Softball League, 2026 inaugural season), as confirmed from public reporting July 2026. Add games as {date, opponent, season, teamScore, opponentScore, lines:[{player, ab, r, h, 2b, 3b, hr, rbi, bb, so, hbp, sf, sb}]}.",
+  "players": [
+    { "name": "Leah Boggs", "position": "C" },
+    { "name": "Savanah Henley", "position": "P" },
+    { "name": "Laurin Krings", "position": "P" },
+    { "name": "Jori Heard", "position": "P" },
+    { "name": "Ava Kuszak", "position": "SS" },
+    { "name": "Hailey Cripe", "position": "IF" },
+    { "name": "Alexis Hastings", "position": "" },
+    { "name": "Cori McMillan", "position": "" },
+    { "name": "Lauren Lucas", "position": "OF" },
+    { "name": "Stefani Smith", "position": "" }
+  ],
+  "games": []
+}

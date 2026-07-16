@@ -15,6 +15,12 @@ interface DiamondsDao {
     @Query("SELECT * FROM players ORDER BY name COLLATE NOCASE")
     fun observePlayers(): Flow<List<Player>>
 
+    @Query("SELECT COUNT(*) FROM players")
+    suspend fun playerCount(): Int
+
+    @Query("SELECT COUNT(*) FROM games")
+    suspend fun gameCount(): Int
+
     @Insert
     suspend fun insertPlayer(player: Player): Long
 

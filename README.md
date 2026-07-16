@@ -23,6 +23,12 @@ added or edited.
 
 All data is stored locally on the device in a Room (SQLite) database.
 
+On first launch the app seeds itself from `app/src/main/assets/seed.json`
+(currently the confirmed 2026 KC Diamonds pro roster). Games and per-player
+box-score lines can be added to that file to ship pre-populated historical
+stats; seeding only runs when the database is empty, so it never overwrites
+user-entered data.
+
 ## Tech
 
 - Kotlin + Jetpack Compose (Material 3)
