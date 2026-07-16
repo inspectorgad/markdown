@@ -2,6 +2,13 @@ name: Scrape KC Diamonds data
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/kc-diamonds-stats-app-r7de5h
+    paths:
+      - 'scrape-trigger.txt'
+      - 'scripts/scrape-kc-diamonds.mjs'
+      - '.github/workflows/scrape-data.yml'
 
 permissions:
   contents: write
