@@ -1,0 +1,86 @@
+URL: https://www.ballclubz.com/kcdiamonds/live/2b7aa5e
+HTTP: 200
+
+WRAP
+BOX
+PLAYS
+	
+1
+	
+2
+	
+3
+	
+4
+	
+5
+	
+6
+	
+7
+	R	H	E	L
+
+St Louis Gat
+	
+0
+	
+0
+	
+0
+	
+0
+	
+0
+	
+0
+	
+0
+	
+0
+	
+1
+	
+0
+	
+0
+
+
+KC Diamonds
+	
+0
+	
+2
+	
+3
+	
+0
+	
+1
+	
+1
+	
+X
+	
+7
+	
+13
+	
+0
+	
+7
+Game Over
+KC Diamonds wins 7-0
+Win: Valdespino - Loss: Lewinski
+Top Batters:
+
+#41 Hailey Cripe
+3 for 3, R, HR, 3 RBI
+#15 Rachel Roupe
+2 for 3, 2 R, HR, 2 RBI
+#99 Allie Skaggs
+2 for 4, 2 R, 2B, RBI, SB
+
+Top Pitchers:
+
+#24 Laurin Krings 4.0 IP, 4 K
+#21 Hope Valdespino 3.0 IP, 4 K

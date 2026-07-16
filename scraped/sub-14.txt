@@ -1,0 +1,104 @@
+URL: https://www.ballclubz.com/kcdiamonds/stats/player/580800
+HTTP: 200
+
+KC Diamonds
+Stats
+Batting Statistics
+#
+	BATTER
+	AVG
+	OBP
+	SLG
+	OPS
+	G
+	PA
+	AB
+	R
+	H
+	RBI
+	2B
+	3B
+	HR
+	SO
+	BB
+	HBP
+	SB
+	CS
+	SH
+	SF
+	GDP
+
+87	Player87, Meg Houk	1.000	1.000	4.000	5.000	1	1	1	1	1	1	0	0	1	0	0	0	0	0	0	0	0
+26	Blampied, Riley	.391	.438	.826	1.264	22	80	69	22	27	24	3	0	9	10	8	0	1	0	0	3	0
+99	Skaggs, Allie	.342	.411	.848	1.259	25	90	79	27	27	30	7	0	11	12	9	1	5	0	0	1	0
+16	Pilon, Presleigh	.500	.554	.643	1.197	21	65	56	19	28	12	4	2	0	3	6	2	6	0	0	1	0
+2	McMillan, Cori	.400	.479	.700	1.179	25	98	80	24	32	18	3	0	7	10	13	1	13	2	0	2	0
+33	Aldridge, Kylie	.441	.500	.662	1.162	22	78	68	19	30	18	3	0	4	1	9	0	3	0	0	1	1
+41	Cripe, Hailey	.373	.472	.644	1.116	22	72	59	18	22	16	1	0	5	6	11	1	3	0	0	1	2
+15	Roupe, Rachel	.404	.478	.596	1.074	24	67	57	15	23	12	3	1	2	7	9	0	0	0	0	1	1
+28	Lucas Thornhill, Lauren	.304	.411	.630	1.041	24	56	46	12	14	13	3	0	4	6	9	0	0	0	0	1	0
+14	Hastings, Alexis	.339	.417	.565	.981	26	72	62	16	21	16	3	1	3	13	9	0	5	1	0	1	0
+25	Brown, Alex	.281	.343	.531	.874	19	36	32	8	9	4	0	1	2	5	2	1	2	1	1	0	0
+7	Kuszak, Ava	.250	.325	.417	.742	16	40	36	6	9	11	0	0	2	9	4	0	0	0	0	0	0
+8	Boggs, Leah	.200	.256	.229	.485	15	39	35	5	7	3	1	0	0	4	3	0	1	0	0	1	0
+0	Owen, Autumn	.143	.333	.143	.476	10	18	14	2	2	1	0	0	0	7	4	0	0	0	0	0	0
+10	Smith, Stephanie	.000	1.000	.000	.000	1	1	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0
+Pitching Statistics
+#
+	PITCHER
+	ERA
+	IP
+	W
+	L
+	SV
+	H
+	R
+	ER
+	K
+	BB
+	HBP
+	BF
+	AB
+	2B
+	3B
+	HR
+	PIT
+	STR
+
+13	Heard, Jori	3.85	40.0	6	2	0	39	22	22	37	16	0	173	157	3	0	7	664	420
+22	Henley, Savanah	3.60	35.0	5	2	0	28	26	18	29	10	9	159	138	1	1	7	570	355
+24	Krings, Laurin	3.56	19.2	2	0	0	18	12	10	17	3	1	84	79	4	1	1	302	207
+77	Ricard, Kasey	5.73	25.2	0	1	0	32	21	21	13	9	7	128	112	7	1	6	498	308
+21	Valdespino, Hope	2.75	40.2	6	1	0	26	17	16	36	11	9	166	144	7	0	5	661	432
+Fielding Statistics
+#
+	FIELDER
+	PO
+	A
+	E
+	DP
+	PCT
+	CSB
+	SBA
+	PB
+	CI
+
+33	Aldridge, Kylie	84	4	2	4	0.978	0	0	1	0
+26	Blampied, Riley	41	1	1	1	0.977	0	0	0	0
+8	Boggs, Leah	70	2	1	0	0.986	0	2	4	0
+25	Brown, Alex	12	3	1	1	0.938	0	0	0	0
+41	Cripe, Hailey	25	17	3	3	0.933	0	0	0	0
+14	Hastings, Alexis	36	0	3	0	0.923	0	0	0	0
+13	Heard, Jori	3	2	0	0	1.000	0	0	0	0
+22	Henley, Savanah	1	2	1	0	0.750	0	0	0	0
+24	Krings, Laurin	3	3	0	0	1.000	0	0	0	0
+7	Kuszak, Ava	12	12	4	1	0.857	0	0	0	0
+28	Lucas Thornhill, Lauren	12	1	0	0	1.000	0	0	0	0
+2	McMillan, Cori	33	0	0	0	1.000	0	0	0	0
+0	Owen, Autumn	44	0	0	0	1.000	0	3	0	0
+16	Pilon, Presleigh	31	17	1	0	0.980	0	0	0	0
+77	Ricard, Kasey	3	1	0	0	1.000	0	1	0	0
+15	Roupe, Rachel	24	1	0	0	1.000	0	0	0	0
+99	Skaggs, Allie	44	31	1	6	0.987	0	0	0	0
+10	Smith, Stephanie	2	0	0	0	1.000	0	0	0	0
+21	Valdespino, Hope	2	0	0	0	1.000	0	0	0	0
