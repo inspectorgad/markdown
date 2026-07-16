@@ -1,6 +1,5 @@
 {
-  "name": "Markdown Editor",
-  "description": "A minimalist, WISIWYG Markdown editor modeled after Typora with full desktop shortcut support.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "KC Diamonds Stats",
+  "description": "Tracks the KC Diamonds softball team's historical player stats and aggregates batting totals, averages, and leaderboards across the season.",
+  "requestFramePermissions": []
 }
