@@ -1,6 +1,7 @@
-// Scrapes public KC Diamonds pages using a real headless browser (runs in
-// GitHub Actions, where outbound network is open). Saves rendered text, HTML,
-// and screenshots under scraped/ so the results can be parsed into seed data.
+// Scrapes KC Diamonds game results and box scores using a real headless
+// browser (runs in GitHub Actions, where outbound network is open).
+// Output under scraped/: games.json (date/opponent/box-score-url mapping from
+// the team site) and box-*.json (line score + full BOX tab text per game).
 import { chromium } from 'playwright';
 import fs from 'fs';
 
@@ -14,60 +15,84 @@ const context = await browser.newContext({
   viewport: { width: 1400, height: 2400 },
 });
 
-async function scrapePage(name, url, { scroll = true, saveHtml = true } = {}) {
+// --- 1. Past results page: map each game (date, opponent) to its box score URL.
+const gamesPage = await context.newPage();
+await gamesPage.goto('https://thekcdiamonds.com/schedule/past-games-results', {
+  waitUntil: 'domcontentloaded',
+  timeout: 60_000,
+});
+await gamesPage.waitForTimeout(6_000);
+for (let i = 0; i < 15; i++) {
+  await gamesPage.evaluate(() => window.scrollBy(0, 1200));
+  await gamesPage.waitForTimeout(1_000);
+}
+const gameBlocks = await gamesPage.evaluate(() => {
+  const out = [];
+  for (const a of document.querySelectorAll('a[href*="ballclubz.com/kcdiamonds/live/"]')) {
+    let el = a;
+    for (let i = 0; i < 8 && el.parentElement; i++) {
+      el = el.parentElement;
+      const t = el.innerText || '';
+      if (/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/.test(t) && t.length < 500) break;
+    }
+    out.push({ href: a.href.split('#')[0], context: (el.innerText || '').slice(0, 400) });
+  }
+  return out;
+});
+fs.writeFileSync(
+  'scraped/past-results.txt',
+  await gamesPage.evaluate(() => document.body.innerText)
+);
+fs.writeFileSync('scraped/games.json', JSON.stringify(gameBlocks, null, 2));
+console.log(`Mapped ${gameBlocks.length} game blocks with box score links`);
+await gamesPage.close();
+
+// --- 2. Each game page: capture the line score (WRAP) and full box score (BOX tab).
+const urls = [...new Set(gameBlocks.map((g) => g.href))];
+let i = 0;
+for (const url of urls) {
+  const name = `box-${String(i++).padStart(2, '0')}`;
   const page = await context.newPage();
   try {
-    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await page.waitForTimeout(6_000);
-    if (scroll) {
-      for (let i = 0; i < 8; i++) {
-        await page.evaluate(() => window.scrollBy(0, 1500));
-        await page.waitForTimeout(1_200);
-      }
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForTimeout(7_000);
+    const wrap = await page.evaluate(() => document.body.innerText);
+    let box = '';
+    try {
+      await page.getByText('BOX', { exact: true }).first().click();
+      await page.waitForTimeout(5_000);
+      box = await page.evaluate(() => document.body.innerText);
+    } catch (e) {
+      box = `BOX TAB ERROR: ${e.message}`;
     }
-    const status = resp ? resp.status() : 0;
-    const text = await page.evaluate(() => (document.body ? document.body.innerText : ''));
-    fs.writeFileSync(`scraped/${name}.txt`, `URL: ${url}\nHTTP: ${status}\n\n${text}`);
-    if (saveHtml) fs.writeFileSync(`scraped/${name}.html`, await page.content());
+    fs.writeFileSync(`scraped/${name}.json`, JSON.stringify({ url, wrap, box }, null, 2));
     await page.screenshot({ path: `scraped/${name}.png`, fullPage: true });
-    console.log(`${name}: HTTP ${status}, ${text.length} chars of text`);
+    console.log(`${name}: ${url} wrap=${wrap.length} box=${box.length}`);
   } catch (e) {
-    fs.writeFileSync(`scraped/${name}.txt`, `URL: ${url}\nERROR: ${e.message}`);
+    fs.writeFileSync(`scraped/${name}.json`, JSON.stringify({ url, error: e.message }));
     console.log(`${name}: ERROR ${e.message}`);
+  } finally {
+    await page.close();
   }
-  return page; // caller must close
 }
 
-// The pages that matter: past results, the BallClubz stats platform, and news.
-const TARGETS = [
-  ['past-results', 'https://thekcdiamonds.com/schedule/past-games-results'],
-  ['ballclubz-stats', 'https://www.ballclubz.com/kcdiamonds/stats'],
-  ['ballclubz-live', 'https://www.ballclubz.com/kcdiamonds/live/2b7aa5e'],
-  ['news-media', 'https://thekcdiamonds.com/news-media/news-media'],
-];
-
-const discovered = new Set();
-for (const [name, url] of TARGETS) {
-  const page = await scrapePage(name, url);
-  try {
-    const links = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('a[href]')).map((a) => a.href)
-    );
-    for (const h of links) {
-      // Follow anything that looks like a game page, box score, or news article.
-      if (/ballclubz\.com\/kcdiamonds\/(?!stats$)[a-z0-9/_-]+/i.test(h)) discovered.add(h.split('#')[0]);
-      if (/thekcdiamonds\.com\/(news|post|blog|news-media)\/.+/i.test(h)) discovered.add(h.split('#')[0]);
-    }
-  } catch {}
-  await page.close();
+// --- 3. Season stats page (aggregate batting/pitching), kept current each run.
+const statsPage = await context.newPage();
+try {
+  await statsPage.goto('https://www.ballclubz.com/kcdiamonds/stats', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60_000,
+  });
+  await statsPage.waitForTimeout(7_000);
+  fs.writeFileSync(
+    'scraped/ballclubz-stats.txt',
+    await statsPage.evaluate(() => document.body.innerText)
+  );
+} catch (e) {
+  fs.writeFileSync('scraped/ballclubz-stats.txt', `ERROR: ${e.message}`);
+} finally {
+  await statsPage.close();
 }
-
-let i = 0;
-for (const url of [...discovered].slice(0, 40)) {
-  const p = await scrapePage(`sub-${String(i++).padStart(2, '0')}`, url, { saveHtml: false });
-  await p.close();
-}
-fs.writeFileSync('scraped/discovered-links.txt', [...discovered].join('\n'));
 
 await browser.close();
-console.log('Done. Files in scraped/:', fs.readdirSync('scraped').join(', '));
+console.log('Done. Files:', fs.readdirSync('scraped').join(', '));

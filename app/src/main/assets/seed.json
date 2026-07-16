@@ -18,8 +18,9 @@
     { "name": "Hailey Cripe", "jerseyNumber": "41", "position": "UTL/INF" },
     { "name": "Kasey Ricard", "jerseyNumber": "77", "position": "RHP" },
     { "name": "Allie Skaggs", "jerseyNumber": "99", "position": "INF" },
-    { "name": "Kylie Aldridge", "jerseyNumber": "", "position": "" },
-    { "name": "Stefani Smith", "jerseyNumber": "", "position": "" }
+    { "name": "Kylie Aldridge", "jerseyNumber": "33", "position": "C/UTL" },
+    { "name": "Stephanie Smith", "jerseyNumber": "10", "position": "" },
+    { "name": "Meg Houk", "jerseyNumber": "87", "position": "" }
   ],
   "games": [
     { "date": "2026-07-15", "opponent": "St. Louis Gateway Gold", "season": "2026" },
