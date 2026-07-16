@@ -2,6 +2,12 @@ name: Scrape KC Diamonds data
 
 on:
   workflow_dispatch:
+  # Nightly at 09:00 UTC (4 AM Central) — after even late games are final.
+  # Note: GitHub only fires cron for workflows on the default branch, so this
+  # activates once the app is merged to main. Until then the nightly update is
+  # driven by a scheduled Claude session that pushes to scrape-trigger.txt.
+  schedule:
+    - cron: '0 9 * * *'
   push:
     branches:
       - claude/kc-diamonds-stats-app-r7de5h
@@ -18,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: claude/kc-diamonds-stats-app-r7de5h
 
       - uses: actions/setup-node@v4
         with:
@@ -32,10 +40,17 @@ jobs:
       - name: Scrape pages
         run: node scripts/scrape-kc-diamonds.mjs
 
-      - name: Commit scraped data to branch
+      - name: Fold new box scores into seed data
+        run: python3 scripts/update-seed.py
+
+      - name: Commit scraped data and seed update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f scraped/
-          git diff --cached --quiet || git commit -m "Add scraped KC Diamonds data [skip ci]"
+          git diff --cached --quiet || git commit -m "Update scraped KC Diamonds data [skip ci]"
+          # Seed commit is separate and NOT [skip ci], so new season data
+          # triggers the APK build workflow.
+          git add app/src/main/assets/seed.json
+          git diff --cached --quiet || git commit -m "Update season data from nightly scrape"
           git push

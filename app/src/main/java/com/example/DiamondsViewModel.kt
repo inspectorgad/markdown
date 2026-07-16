@@ -18,8 +18,9 @@ class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = DiamondsDatabase.get(app).dao()
 
     init {
-        // First launch only: load the bundled KC Diamonds roster/game data.
-        viewModelScope.launch { Seeder.seedIfEmpty(app, dao) }
+        // Merge bundled season data into the database (gap-filling only, so
+        // updated APKs bring new games without touching user-entered data).
+        viewModelScope.launch { Seeder.sync(app, dao) }
     }
 
     val players: StateFlow<List<Player>> = dao.observePlayers()
