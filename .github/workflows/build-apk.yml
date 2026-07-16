@@ -7,6 +7,9 @@ on:
       - claude/kc-diamonds-stats-app-r7de5h
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,3 +41,20 @@ jobs:
         with:
           name: kc-diamonds-stats-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # Also publish the APK to a rolling "latest-apk" release, so it can be
+      # downloaded with one tap from any phone browser (no sign-in, no zip):
+      # https://github.com/inspectorgad/markdown/releases/latest/download/app-debug.apk
+      - name: Publish APK to latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest-apk --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create latest-apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "KC Diamonds Stats - latest build" \
+              --notes "Rolling release: always carries the newest APK with current season data. Download app-debug.apk below and install it on your Android device." \
+              --latest
+          gh release upload latest-apk app/build/outputs/apk/debug/app-debug.apk \
+            --repo "$GITHUB_REPOSITORY" --clobber
