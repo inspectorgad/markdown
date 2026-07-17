@@ -190,6 +190,9 @@ for f in sorted(glob.glob('scraped/box-*.json')):
                 changed = True
 
 if changed:
+    seed['formatVersion'] = 1
+    seed['generatedAt'] = datetime.datetime.now(datetime.timezone.utc).strftime(
+        '%Y-%m-%dT%H:%M:%SZ')
     json.dump(seed, open(SEED, 'w'), indent=2)
 scored = [g for g in seed['games'] if 'teamScore' in g]
 wins = sum(1 for g in scored if g['teamScore'] > g['opponentScore'])

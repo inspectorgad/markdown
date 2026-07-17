@@ -6,10 +6,17 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.DiamondsDatabase
 import com.example.data.Game
 import com.example.data.Player
+import com.example.data.SeasonSync
 import com.example.data.Seeder
 import com.example.data.StatLine
+import com.example.data.SyncResult
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -17,10 +24,45 @@ class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val dao = DiamondsDatabase.get(app).dao()
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val _dataUpdatedAt = MutableStateFlow(SeasonSync.lastGeneratedAt(app))
+    val dataUpdatedAt: StateFlow<String?> = _dataUpdatedAt.asStateFlow()
+
+    // Snackbar messages, emitted only for user-initiated refreshes.
+    private val _syncMessages = MutableSharedFlow<String>()
+    val syncMessages: SharedFlow<String> = _syncMessages.asSharedFlow()
+
     init {
-        // Merge bundled season data into the database (gap-filling only, so
-        // updated APKs bring new games without touching user-entered data).
-        viewModelScope.launch { Seeder.sync(app, dao) }
+        viewModelScope.launch {
+            // Bundled data first (also covers first launch offline), then a
+            // throttled network sync for anything newer.
+            Seeder.sync(app, dao)
+            if (SeasonSync.shouldAutoSync(app)) refreshInternal(manual = false)
+        }
+    }
+
+    fun refresh() = viewModelScope.launch { refreshInternal(manual = true) }
+
+    private suspend fun refreshInternal(manual: Boolean) {
+        if (_isSyncing.value) return
+        _isSyncing.value = true
+        val result = try {
+            SeasonSync.sync(getApplication(), dao)
+        } finally {
+            _isSyncing.value = false
+        }
+        _dataUpdatedAt.value = SeasonSync.lastGeneratedAt(getApplication())
+        if (manual) {
+            _syncMessages.emit(
+                when (result) {
+                    is SyncResult.Updated -> "Season data updated"
+                    SyncResult.NoChange -> "Already up to date"
+                    is SyncResult.Failed -> "Sync failed: ${result.reason}"
+                }
+            )
+        }
     }
 
     val players: StateFlow<List<Player>> = dao.observePlayers()

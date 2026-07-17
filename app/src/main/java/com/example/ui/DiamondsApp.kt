@@ -1,19 +1,26 @@
 package com.example.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -23,6 +30,7 @@ import com.example.DiamondsViewModel
 
 enum class Tab(val label: String) { Roster("Roster"), Games("Games"), Leaders("Leaders") }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     var currentTab by rememberSaveable { mutableStateOf(Tab.Roster) }
@@ -33,6 +41,13 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     val players by viewModel.players.collectAsStateWithLifecycle()
     val games by viewModel.games.collectAsStateWithLifecycle()
     val statLines by viewModel.statLines.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val dataUpdatedAt by viewModel.dataUpdatedAt.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.syncMessages.collect { snackbarHostState.showSnackbar(it) }
+    }
 
     val showingDetail = openPlayerId != null || openGameId != null
     BackHandler(enabled = showingDetail) {
@@ -71,6 +86,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
         )
 
         else -> Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 NavigationBar {
                     Tab.entries.forEach { tab ->
@@ -93,30 +109,35 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                 }
             }
         ) { innerPadding ->
-            val contentModifier = Modifier.padding(innerPadding)
-            when (currentTab) {
-                Tab.Roster -> RosterScreen(
-                    players = players,
-                    statLines = statLines,
-                    onSavePlayer = viewModel::savePlayer,
-                    onOpenPlayer = { openPlayerId = it.id },
-                    modifier = contentModifier
-                )
+            PullToRefreshBox(
+                isRefreshing = isSyncing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                when (currentTab) {
+                    Tab.Roster -> RosterScreen(
+                        players = players,
+                        statLines = statLines,
+                        onSavePlayer = viewModel::savePlayer,
+                        onOpenPlayer = { openPlayerId = it.id }
+                    )
 
-                Tab.Games -> GamesScreen(
-                    games = games,
-                    statLines = statLines,
-                    onSaveGame = { game -> viewModel.saveGame(game) { openGameId = it } },
-                    onOpenGame = { openGameId = it.id },
-                    modifier = contentModifier
-                )
+                    Tab.Games -> GamesScreen(
+                        games = games,
+                        statLines = statLines,
+                        onSaveGame = { game -> viewModel.saveGame(game) { openGameId = it } },
+                        onOpenGame = { openGameId = it.id }
+                    )
 
-                Tab.Leaders -> LeadersScreen(
-                    players = players,
-                    games = games,
-                    statLines = statLines,
-                    modifier = contentModifier
-                )
+                    Tab.Leaders -> LeadersScreen(
+                        players = players,
+                        games = games,
+                        statLines = statLines,
+                        dataUpdatedAt = dataUpdatedAt
+                    )
+                }
             }
         }
     }

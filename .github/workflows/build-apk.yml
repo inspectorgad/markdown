@@ -58,3 +58,8 @@ jobs:
               --latest
           gh release upload latest-apk app/build/outputs/apk/debug/app-debug.apk \
             --repo "$GITHUB_REPOSITORY" --clobber
+          # The parsed season data rides along so the app can sync itself
+          # without an APK reinstall.
+          cp app/src/main/assets/seed.json season-data.json
+          gh release upload latest-apk season-data.json \
+            --repo "$GITHUB_REPOSITORY" --clobber

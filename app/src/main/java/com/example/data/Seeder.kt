@@ -33,7 +33,8 @@ object Seeder {
         runCatching { merge(JSONObject(json), dao) }
     }
 
-    private suspend fun merge(root: JSONObject, dao: DiamondsDao) {
+    /** Also used by [SeasonSync] for network-fetched season data. */
+    suspend fun merge(root: JSONObject, dao: DiamondsDao) {
         val playerIdsByName = dao.playersOnce().associate { it.name to it.id }.toMutableMap()
 
         val players = root.optJSONArray("players")

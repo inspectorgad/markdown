@@ -41,7 +41,8 @@ fun LeadersScreen(
     players: List<Player>,
     games: List<Game>,
     statLines: List<StatLine>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dataUpdatedAt: String? = null
 ) {
     // Seasons ordered most recent first; default selection is the current (latest) season.
     val seasons = games.sortedByDescending { it.date }.map { it.season }.distinct()
@@ -121,6 +122,13 @@ fun LeadersScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        dataUpdatedAt?.let {
+                            Text(
+                                "Data updated ${it.take(16).replace('T', ' ')} UTC · pull down to refresh",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
