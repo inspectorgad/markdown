@@ -98,9 +98,9 @@ Lawrence, Kan.
 Days
 15
 Hours
-5
+1
 Minutes
-34
+41
 Seconds
 Add To Calendar
 Text Only
@@ -334,6 +334,7 @@ Oct 2
 
 History
 Explore Lawrence
+Skip Ad
 at
 UCF
 
