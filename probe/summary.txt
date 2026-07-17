@@ -1,0 +1,20 @@
+GET https://ncaa-api.henrygd.me/scoreboard/volleyball-women/d1/2025/08/29 -> 200 (162183 chars)
+saved probe/ncaa-scoreboard-slash.json (162183 bytes)
+GET https://ncaa-api.henrygd.me/scoreboard/volleyball-women/d1/2025-08-29 -> 200 (982 chars)
+saved probe/ncaa-scoreboard-dash.json (982 bytes)
+GET https://ncaa-api.henrygd.me/game/6480027 -> 200 (1592 chars)
+saved probe/ncaa-game-6480027.json (1592 bytes)
+GET https://ncaa-api.henrygd.me/game/6480027/boxscore -> 200 (15854 chars)
+saved probe/ncaa-game-6480027-boxscore.json (15854 bytes)
+GET https://ncaa-api.henrygd.me/game/6480027/play-by-play -> 200 (89227 chars)
+saved probe/ncaa-game-6480027-pbp.json (89227 bytes)
+GOTO https://kuathletics.com/sports/womens-volleyball/stats/2025 -> 200
+saved probe/ku-stats-2025.txt (3759 bytes)
+saved probe/ku-stats-2025.png
+GOTO https://kuathletics.com/sports/womens-volleyball/roster/2025 -> 200
+saved probe/ku-roster-2025.txt (7070 bytes)
+saved probe/ku-roster-2025.png
+GOTO https://kuathletics.com/sports/womens-volleyball/schedule/2025 -> 200
+saved probe/ku-schedule-2025.txt (8296 bytes)
+saved probe/ku-schedule-2025.png
+saved probe/sidearm-json-endpoints.txt (70977 bytes)
