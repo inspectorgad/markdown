@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   scrape:
@@ -47,13 +48,29 @@ jobs:
         run: python3 scripts/update-seed.py
 
       - name: Commit scraped data and seed update
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f scraped/
           git diff --cached --quiet || git commit -m "Update scraped KU volleyball data [skip ci]"
-          # Seed commit is separate and NOT [skip ci], so new season data
-          # triggers the APK build workflow.
           git add app/src/main/assets/seed.json
-          git diff --cached --quiet || git commit -m "Update season data from nightly scrape"
+          if git diff --cached --quiet; then
+            echo "seed_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Update season data from nightly scrape [skip ci]"
+            echo "seed_changed=true" >> "$GITHUB_OUTPUT"
+          fi
           git push
+
+      # Pushes made with GITHUB_TOKEN never trigger push workflows (GitHub's
+      # recursion guard), so the APK rebuild must be dispatched explicitly —
+      # workflow_dispatch is exempt from that guard.
+      - name: Rebuild APK with new season data
+        if: steps.commit.outputs.seed_changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-apk.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref claude/ku-volleyball-app-feasibility-c4se1m
