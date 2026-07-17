@@ -24,22 +24,34 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      # The debug signing keystore is stored base64-encoded in the repo;
-      # the build expects it at ${rootDir}/debug.keystore.
-      - name: Restore debug keystore
-        run: base64 -d debug.keystore.base64 > debug.keystore
+      # Signing keystores are stored base64-encoded in the repo; the build
+      # expects them at ${rootDir}/debug.keystore and ${rootDir}/upload.keystore.
+      - name: Restore keystores
+        run: |
+          base64 -d debug.keystore.base64 > debug.keystore
+          base64 -d upload.keystore.base64 > upload.keystore
 
       - name: Run unit tests
+        env:
+          VERSION_CODE: ${{ github.run_number }}
         run: gradle :app:testDebugUnitTest
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug
+      - name: Build debug APK and Play release bundle
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle :app:assembleDebug :app:bundleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ku-volleyball-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Play bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ku-volleyball-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
 
       # Publish the APK to a rolling "ku-volleyball-apk" release for one-tap
       # phone download. IMPORTANT: never marked "latest" — this repo also
@@ -62,4 +74,8 @@ jobs:
           # without an APK reinstall.
           cp app/src/main/assets/seed.json season-data.json
           gh release upload ku-volleyball-apk season-data.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          # Play Store bundle: download this and upload it to the Play
+          # Console (internal testing) whenever the app code changes.
+          gh release upload ku-volleyball-apk app/build/outputs/bundle/release/app-release.aab \
             --repo "$GITHUB_REPOSITORY" --clobber

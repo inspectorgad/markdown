@@ -11,23 +11,29 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    // Distinct from the KC Diamonds app id so both can be installed side by side.
-    applicationId = "com.example.kuvolleyball"
+    // Play-compatible id (com.example.* is rejected by Google Play); also
+    // distinct from the KC Diamonds app so both install side by side.
+    applicationId = "io.github.inspectorgad.kuvolleyball"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // Play requires a strictly increasing versionCode; CI passes the
+    // workflow run number.
+    versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+    versionName = "1.0." + (System.getenv("VERSION_CODE") ?: "0")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      // Play App Signing upload key. Google re-signs with the app signing
+      // key it holds, and a leaked upload key can be reset from the Play
+      // Console, which is what makes the committed-keystore setup tolerable.
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/upload.keystore"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "kuvb-upload-2026"
       keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "kuvb-upload-2026"
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
