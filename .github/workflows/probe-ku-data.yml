@@ -1,0 +1,44 @@
+name: Probe KU volleyball data sources
+
+# One-off feasibility probe. Triggered by push (workflow_dispatch is not
+# permitted for the integration), same pattern as the KC Diamonds scraper.
+on:
+  push:
+    branches:
+      - claude/ku-volleyball-app-feasibility-c4se1m
+    paths:
+      - 'probe-trigger.txt'
+      - 'scripts/probe-ku-volleyball.mjs'
+      - '.github/workflows/probe-ku-data.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/ku-volleyball-app-feasibility-c4se1m
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y > /dev/null
+          npm install playwright@1.49.0 > /dev/null
+          npx playwright install --with-deps chromium
+
+      - name: Run probe
+        run: node scripts/probe-ku-volleyball.mjs
+
+      - name: Commit probe results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f probe/
+          git diff --cached --quiet || git commit -m "Add KU volleyball data probe results [skip ci]"
+          git push
