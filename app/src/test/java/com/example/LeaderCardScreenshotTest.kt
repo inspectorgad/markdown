@@ -3,6 +3,7 @@ package com.example
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import com.example.ui.LeaderCard
 import com.example.ui.theme.MyApplicationTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -16,23 +17,27 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [36])
-class GreetingScreenshotTest {
+class LeaderCardScreenshotTest {
 
     @get:Rule val composeTestRule = createComposeRule()
 
     @Test
-    fun shortcut_row_screenshot() {
+    fun leader_card_screenshot() {
         composeTestRule.setContent {
             MyApplicationTheme {
                 Surface {
-                    ShortcutRow(
-                        actionName = "Format Bold text",
-                        keys = "Ctrl + B"
+                    LeaderCard(
+                        title = "Kills",
+                        entries = listOf(
+                            "Jovana Zelenovic" to "375",
+                            "Rhian Swanson" to "352",
+                            "Reese Ptacek" to "331"
+                        )
                     )
                 }
             }
         }
 
-        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/greeting.png")
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/leader_card.png")
     }
 }

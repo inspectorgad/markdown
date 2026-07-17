@@ -11,7 +11,8 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.markdowneditor.pnywhg"
+    // Distinct from the KC Diamonds app id so both can be installed side by side.
+    applicationId = "com.example.kuvolleyball"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

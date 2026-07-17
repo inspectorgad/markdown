@@ -1,6 +1,5 @@
 {
-  "name": "Markdown Editor",
-  "description": "A minimalist, WISIWYG Markdown editor modeled after Typora with full desktop shortcut support.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "KU Volleyball",
+  "description": "Follows the Kansas Jayhawks Women's Volleyball team with match results, set scores, per-player box scores, season aggregates, and leaderboards, auto-updated nightly from official NCAA and KU Athletics data.",
+  "requestFramePermissions": []
 }
