@@ -3,14 +3,11 @@ name: Scrape KC Diamonds data
 on:
   workflow_dispatch:
   # Nightly at 09:00 UTC (4 AM Central) — after even late games are final.
-  # Note: GitHub only fires cron for workflows on the default branch, so this
-  # activates once the app is merged to main. Until then the nightly update is
-  # driven by a scheduled Claude session that pushes to scrape-trigger.txt.
   schedule:
     - cron: '0 9 * * *'
   push:
     branches:
-      - claude/kc-diamonds-stats-app-r7de5h
+      - main
     paths:
       - 'scrape-trigger.txt'
       - 'scripts/scrape-kc-diamonds.mjs'
@@ -23,9 +20,8 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
+      # No pinned ref: cron and push runs both operate on main.
       - uses: actions/checkout@v4
-        with:
-          ref: claude/kc-diamonds-stats-app-r7de5h
 
       - uses: actions/setup-node@v4
         with:
