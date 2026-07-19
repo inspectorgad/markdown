@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KC Diamonds — 2026 Season Dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb; --page: #f9f9f7;
+  --ink-1: #0b0b0b; --ink-2: #52514e; --ink-muted: #898781;
+  --grid: #e1e0d9; --baseline: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --series-1: #2a78d6; --seq: #256abf; --seq-soft: #9ec5f4;
+  --div-pos: #2a78d6; --div-neg: #e34948; --div-mid: #f0efec;
+  --status-good: #0ca30c; --status-crit: #d03b3b; --delta-good: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-muted: #898781;
+    --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --seq: #3987e5; --seq-soft: #1c5cab;
+    --div-pos: #3987e5; --div-neg: #e66767; --div-mid: #383835;
+    --status-good: #0ca30c; --status-crit: #d03b3b; --delta-good: #0ca30c;
+  }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page); color: var(--ink-1);
+  padding: 24px clamp(12px, 3vw, 40px) 60px;
+}
+a { color: var(--series-1); }
+.wrap { max-width: 1240px; margin: 0 auto; }
+
+header.hero {
+  background: linear-gradient(120deg, #0d366b, #1c5cab 55%, #2a78d6);
+  color: #fff; border-radius: 14px; padding: 26px 30px; margin-bottom: 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 24px 44px;
+}
+.hero h1 { font-size: clamp(20px, 3vw, 30px); letter-spacing: .04em; }
+.hero h1 span { opacity: .75; font-weight: 400; }
+.hero .big { font-size: clamp(34px, 5vw, 52px); font-weight: 700; line-height: 1; }
+.hero .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; opacity: .75; margin-top: 4px; }
+.hero .stamp { margin-left: auto; font-size: 12px; opacity: .8; text-align: right; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.tile { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; }
+.tile .v { font-size: 26px; font-weight: 700; }
+.tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-muted); margin-top: 2px; }
+
+.card { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+.card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); margin-bottom: 12px; }
+.card h2 small { text-transform: none; letter-spacing: 0; color: var(--ink-muted); font-weight: 400; }
+
+.strip { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  flex: 0 0 auto; min-width: 64px; text-align: center; border-radius: 8px; padding: 7px 8px;
+  font-size: 12px; font-weight: 700; color: #fff; cursor: default;
+}
+.chip small { display: block; font-weight: 400; font-size: 10px; opacity: .85; }
+.chip.w { background: var(--status-good); } .chip.l { background: var(--status-crit); }
+.chip.na { background: transparent; color: var(--ink-muted); border: 1px dashed var(--baseline); font-weight: 400; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+svg text { font-family: inherit; }
+.axis { font-size: 10px; fill: var(--ink-muted); }
+
+.lb-row { display: grid; grid-template-columns: 118px 1fr 46px; align-items: center; gap: 8px; margin: 7px 0; font-size: 13px; }
+.lb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-bar { height: 14px; border-radius: 0 4px 4px 0; background: var(--seq); min-width: 2px; }
+.lb-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 7px 9px; text-align: right; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--grid); }
+th { color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; background: var(--surface-1); }
+th:first-child, td:first-child { text-align: left; }
+th.on { color: var(--series-1); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: color-mix(in srgb, var(--series-1) 8%, transparent); }
+.tblwrap { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+
+#tooltip {
+  position: fixed; z-index: 30; pointer-events: none; display: none;
+  background: var(--ink-1); color: var(--page); font-size: 12px; line-height: 1.5;
+  border-radius: 8px; padding: 8px 11px; max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+#tooltip b { display: block; }
+
+#detail { display: none; }
+#detail .close { float: right; cursor: pointer; border: 1px solid var(--ring); background: none; color: var(--ink-2); border-radius: 6px; padding: 4px 10px; font-size: 12px; }
+#detail h2 { margin-bottom: 2px; }
+#detail .sub { color: var(--ink-muted); font-size: 12px; margin-bottom: 12px; }
+
+footer { color: var(--ink-muted); font-size: 12px; margin-top: 8px; line-height: 1.7; }
+#err { display: none; background: var(--status-crit); color: #fff; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="err"></div>
+  <header class="hero">
+    <div>
+      <h1>KC DIAMONDS <span>· 2026 Season</span></h1>
+      <div class="lbl" style="margin-top:8px">Professional Softball League</div>
+    </div>
+    <div><div class="big" id="h-rec">–</div><div class="lbl">Record</div></div>
+    <div><div class="big" id="h-strk">–</div><div class="lbl">Streak</div></div>
+    <div><div class="big" id="h-diff">–</div><div class="lbl">Run diff</div></div>
+    <div class="stamp" id="h-stamp"></div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Season results <small>— hover a game for details</small></h2>
+    <div class="strip" id="strip"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h2>Cumulative wins</h2><div id="c-wins"></div></div>
+    <div class="card"><h2>Run differential by game <small>— blue: Diamonds ahead · red: opponent</small></h2><div id="c-diff"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Leaders</h2>
+    <div class="grid4" id="leaders"></div>
+  </div>
+
+  <div class="card" id="detail">
+    <button class="close" onclick="closeDetail()">✕ close</button>
+    <h2 id="d-name"></h2>
+    <div class="sub" id="d-sub"></div>
+    <div class="grid2">
+      <div><h2 style="font-size:12px">Batting average trend <small>— season-to-date after each game</small></h2><div id="d-spark"></div></div>
+      <div class="tblwrap" style="max-height:300px"><table id="d-log"></table></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Full batting table <small>— click a column to sort, a row for the game log</small></h2>
+    <div class="tblwrap"><table id="stats"></table></div>
+  </div>
+
+  <footer>
+    Data: official KC Diamonds stats (BallClubz), refreshed nightly by the automated pipeline.
+    Rate stats: AVG = H/AB · OBP = (H+BB+HBP)/(AB+BB+HBP+SF) · SLG = TB/AB · OPS = OBP+SLG.
+    Four games (Jun 25, Jul 9–11) have final scores but no published box scores; exhibition games have no published data.
+    <span id="f-src"></span>
+  </footer>
+</div>
+<div id="tooltip"></div>
+
+<script>
+const SOURCES = [
+  'https://raw.githubusercontent.com/inspectorgad/markdown/main/app/src/main/assets/seed.json',
+  'https://github.com/inspectorgad/markdown/releases/latest/download/season-data.json',
+];
+const tt = document.getElementById('tooltip');
+const fmt3 = v => { const s = v.toFixed(3); return s.startsWith('0.') ? s.slice(1) : s; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function showTT(html, x, y) {
+  tt.innerHTML = html; tt.style.display = 'block';
+  const w = tt.offsetWidth, h = tt.offsetHeight;
+  tt.style.left = Math.min(x + 14, innerWidth - w - 10) + 'px';
+  tt.style.top = Math.max(8, Math.min(y + 14, innerHeight - h - 10)) + 'px';
+}
+function hideTT() { tt.style.display = 'none'; }
+
+function agg(lines) {
+  const t = {ab:0,r:0,h:0,'2b':0,'3b':0,hr:0,rbi:0,bb:0,so:0,hbp:0,sf:0,sb:0,g:0};
+  for (const l of lines) { t.g++; for (const k in t) if (k !== 'g') t[k] += (l[k] || 0); }
+  t.singles = t.h - t['2b'] - t['3b'] - t.hr;
+  t.tb = t.singles + 2*t['2b'] + 3*t['3b'] + 4*t.hr;
+  t.avg = t.ab ? t.h/t.ab : 0;
+  const obpD = t.ab + t.bb + t.hbp + t.sf;
+  t.obp = obpD ? (t.h + t.bb + t.hbp)/obpD : 0;
+  t.slg = t.ab ? t.tb/t.ab : 0;
+  t.ops = t.obp + t.slg;
+  return t;
+}
+function lineSummary(l) {
+  const p = [`${l.h||0}-${l.ab||0}`];
+  if (l.hr) p.push(l.hr > 1 ? `${l.hr} HR` : 'HR');
+  if (l['3b']) p.push('3B'); if (l['2b']) p.push('2B');
+  if (l.rbi) p.push(`${l.rbi} RBI`); if (l.r) p.push(`${l.r} R`);
+  if (l.bb) p.push(`${l.bb} BB`); if (l.sb) p.push(`${l.sb} SB`);
+  return p.join(', ');
+}
+
+let DATA, PLAYED, TOTALS, sortKey = 'ab', sortDir = -1;
+
+async function load() {
+  let lastErr;
+  for (const url of SOURCES) {
+    try {
+      const r = await fetch(url, {cache: 'no-cache'});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      DATA = await r.json();
+      document.getElementById('f-src').textContent = ' Source feed: ' + new URL(url).host + '.';
+      render();
+      return;
+    } catch (e) { lastErr = e; }
+  }
+  const err = document.getElementById('err');
+  err.style.display = 'block';
+  err.textContent = 'Could not load season data (' + lastErr + '). Check your connection and reload.';
+}
+
+function render() {
+  const games = [...DATA.games].sort((a,b) => a.date < b.date ? -1 : 1);
+  PLAYED = games.filter(g => g.teamScore != null);
+  const w = PLAYED.filter(g => g.teamScore > g.opponentScore).length;
+  const l = PLAYED.filter(g => g.teamScore < g.opponentScore).length;
+  const rf = PLAYED.reduce((s,g) => s + g.teamScore, 0);
+  const ra = PLAYED.reduce((s,g) => s + g.opponentScore, 0);
+
+  let strk = 0, sType = '';
+  for (let i = PLAYED.length - 1; i >= 0; i--) {
+    const t = PLAYED[i].teamScore > PLAYED[i].opponentScore ? 'W' : 'L';
+    if (!sType) sType = t;
+    if (t === sType) strk++; else break;
+  }
+  document.getElementById('h-rec').textContent = `${w}-${l}`;
+  document.getElementById('h-strk').textContent = sType ? `${sType}${strk}` : '–';
+  document.getElementById('h-diff').textContent = (rf-ra >= 0 ? '+' : '') + (rf-ra);
+  const next = games.find(g => g.teamScore == null && g.date >= new Date().toISOString().slice(0,10));
+  document.getElementById('h-stamp').innerHTML =
+    (DATA.generatedAt ? `Data updated ${esc(DATA.generatedAt.slice(0,16).replace('T',' '))} UTC<br>` : '') +
+    (next ? `Next: ${esc(next.date)} vs ${esc(next.opponent)}` : '');
+
+  // Team tiles
+  const allLines = games.flatMap(g => g.lines || []);
+  const team = agg(allLines);
+  const tiles = [
+    ['Team AVG', fmt3(team.avg)], ['OBP', fmt3(team.obp)], ['SLG', fmt3(team.slg)], ['OPS', fmt3(team.ops)],
+    ['Runs / game', (rf / Math.max(1, PLAYED.length)).toFixed(1)],
+    ['Runs allowed / game', (ra / Math.max(1, PLAYED.length)).toFixed(1)],
+    ['Shutouts thrown', PLAYED.filter(g => g.opponentScore === 0).length],
+    ['Home runs', team.hr],
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(
+    ([k, v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+
+  // Results strip
+  const strip = document.getElementById('strip');
+  strip.innerHTML = '';
+  for (const g of games.filter(x => x.date <= new Date().toISOString().slice(0,10))) {
+    const d = document.createElement('div');
+    if (g.teamScore == null) {
+      d.className = 'chip na'; d.innerHTML = `–<small>${g.date.slice(5)}</small>`;
+    } else {
+      const win = g.teamScore > g.opponentScore;
+      d.className = 'chip ' + (win ? 'w' : 'l');
+      d.innerHTML = `${win ? 'W' : 'L'} ${g.teamScore}–${g.opponentScore}<small>${g.date.slice(5)}</small>`;
+    }
+    d.addEventListener('mousemove', ev => {
+      let top = '';
+      if (g.lines && g.lines.length) {
+        const best = [...g.lines].sort((a,b) => (b.h+b.hr*2+b.rbi) - (a.h+a.hr*2+a.rbi))[0];
+        top = `<br>Top: ${esc(best.player)} — ${esc(lineSummary(best))}`;
+      }
+      showTT(`<b>${esc(g.date)} vs ${esc(g.opponent)}</b>` +
+        (g.teamScore != null ? `Final ${g.teamScore}–${g.opponentScore}${top}` : 'No published box score'), ev.clientX, ev.clientY);
+    });
+    d.addEventListener('mouseleave', hideTT);
+    strip.appendChild(d);
+  }
+
+  renderWinsChart(PLAYED);
+  renderDiffChart(PLAYED);
+
+  // Per-player totals
+  const byPlayer = {};
+  games.forEach(g => (g.lines || []).forEach(l => {
+    (byPlayer[l.player] = byPlayer[l.player] || []).push({...l, date: g.date, opponent: g.opponent});
+  }));
+  const jersey = {}, pos = {};
+  DATA.players.forEach(p => { jersey[p.name] = p.jerseyNumber; pos[p.name] = p.position; });
+  TOTALS = Object.entries(byPlayer).map(([name, lines]) => ({name, jersey: jersey[name] || '', pos: pos[name] || '', lines, ...agg(lines)}));
+
+  renderLeaders();
+  renderTable();
+}
+
+function svgEl(w, h) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', `0 0 ${w} ${h}`); s.style.width = '100%'; s.style.display = 'block';
+  return s;
+}
+const N = 'http://www.w3.org/2000/svg';
+function add(parent, tag, attrs, text) {
+  const e = document.createElementNS(N, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e); return e;
+}
+
+function renderWinsChart(played) {
+  const W = 560, H = 200, m = {t: 26, r: 12, b: 24, l: 30};
+  const svg = svgEl(W, H);
+  const n = played.length;
+  let wins = 0;
+  const pts = played.map((g, i) => {
+    if (g.teamScore > g.opponentScore) wins++;
+    return {i, wins, g};
+  });
+  const x = i => m.l + (n === 1 ? 0 : i * (W - m.l - m.r) / (n - 1));
+  const y = v => H - m.b - v * (H - m.t - m.b) / Math.max(1, wins);
+  for (let gv = 0; gv <= wins; gv += 5) {
+    add(svg, 'line', {x1: m.l, x2: W - m.r, y1: y(gv), y2: y(gv), stroke: 'var(--grid)', 'stroke-width': 1});
+    add(svg, 'text', {x: m.l - 5, y: y(gv) + 3, 'text-anchor': 'end', class: 'axis'}, gv);
+  }
+  add(svg, 'line', {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: 'var(--baseline)', 'stroke-width': 1});
+  add(svg, 'path', {
+    d: pts.map((p, i) => (i ? 'L' : 'M') + x(p.i) + ' ' + y(p.wins)).join(' '),
+    fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round'
+  });
+  const last = pts[pts.length - 1];
+  add(svg, 'circle', {cx: x(last.i), cy: y(last.wins), r: 4, fill: 'var(--series-1)'});
+  add(svg, 'text', {x: x(last.i) - 8, y: y(last.wins) - 8, 'text-anchor': 'end', class: 'axis', 'font-weight': 700, fill: 'var(--ink-2)'}, `${last.wins} wins`);
+  pts.forEach(p => {
+    const hit = add(svg, 'rect', {x: x(p.i) - (W - m.l - m.r) / n / 2, y: m.t, width: (W - m.l - m.r) / n, height: H - m.t - m.b, fill: 'transparent'});
+    hit.addEventListener('mousemove', ev => showTT(
+      `<b>Game ${p.i + 1}: ${esc(p.g.date)} vs ${esc(p.g.opponent)}</b>` +
+      `${p.g.teamScore > p.g.opponentScore ? 'W' : 'L'} ${p.g.teamScore}–${p.g.opponentScore} · ${p.wins} wins to date`, ev.clientX, ev.clientY));
+    hit.addEventListener('mouseleave', hideTT);
+  });
+  const box = document.getElementById('c-wins'); box.innerHTML = ''; box.appendChild(svg);
+}
+
+function renderDiffChart(played) {
+  const W = 560, H = 200, m = {t: 12, r: 12, b: 24, l: 30};
+  const svg = svgEl(W, H);
+  const n = played.length;
+  const maxAbs = Math.max(...played.map(g => Math.abs(g.teamScore - g.opponentScore)), 1);
+  const x = i => m.l + i * (W - m.l - m.r) / n;
+  const bw = Math.max(3, (W - m.l - m.r) / n - 2);
+  const y0 = (H - m.b + m.t) / 2;
+  const scale = (H - m.t - m.b) / 2 / maxAbs;
+  [-maxAbs, 0, maxAbs].forEach(v => {
+    add(svg, 'line', {x1: m.l, x2: W - m.r, y1: y0 - v * scale, y2: y0 - v * scale, stroke: v === 0 ? 'var(--baseline)' : 'var(--grid)', 'stroke-width': 1});
+    add(svg, 'text', {x: m.l - 5, y: y0 - v * scale + 3, 'text-anchor': 'end', class: 'axis'}, v > 0 ? '+' + v : v);
+  });
+  played.forEach((g, i) => {
+    const d = g.teamScore - g.opponentScore;
+    const h = Math.abs(d) * scale;
+    const r = add(svg, 'rect', {
+      x: x(i), y: d >= 0 ? y0 - h : y0, width: bw, height: Math.max(1, h),
+      rx: 2, fill: d >= 0 ? 'var(--div-pos)' : 'var(--div-neg)'
+    });
+    r.addEventListener('mousemove', ev => showTT(
+      `<b>${esc(g.date)} vs ${esc(g.opponent)}</b>${d >= 0 ? 'W' : 'L'} ${g.teamScore}–${g.opponentScore} (${d > 0 ? '+' : ''}${d})`, ev.clientX, ev.clientY));
+    r.addEventListener('mouseleave', hideTT);
+  });
+  const box = document.getElementById('c-diff'); box.innerHTML = ''; box.appendChild(svg);
+}
+
+function renderLeaders() {
+  const minAB = PLAYED.length;   // qualify: ~1 AB per team game played
+  const cats = [
+    ['Batting average', `min ${minAB} AB`, t => t.ab >= minAB ? t.avg : null, fmt3],
+    ['Home runs', '', t => t.hr || null, v => v],
+    ['RBIs', '', t => t.rbi || null, v => v],
+    ['Stolen bases', '', t => t.sb || null, v => v],
+  ];
+  document.getElementById('leaders').innerHTML = cats.map(([title, note, sel, f]) => {
+    const rows = TOTALS.map(t => ({t, v: sel(t)})).filter(r => r.v != null)
+      .sort((a,b) => b.v - a.v).slice(0, 5);
+    const max = rows.length ? rows[0].v : 1;
+    return `<div><h2 style="font-size:12px">${title} ${note ? `<small>— ${note}</small>` : ''}</h2>` +
+      rows.map(r => `<div class="lb-row"><span class="lb-name">${esc(r.t.name)}</span>` +
+        `<span><span class="lb-bar" style="width:${Math.max(3, 100 * r.v / max)}%; display:block"></span></span>` +
+        `<span class="lb-val">${f(r.v)}</span></div>`).join('') + '</div>';
+  }).join('');
+}
+
+const COLS = [
+  ['name', 'Player'], ['g', 'GP'], ['ab', 'AB'], ['r', 'R'], ['h', 'H'], ['2b', '2B'], ['3b', '3B'],
+  ['hr', 'HR'], ['rbi', 'RBI'], ['bb', 'BB'], ['so', 'SO'], ['sb', 'SB'],
+  ['avg', 'AVG'], ['obp', 'OBP'], ['slg', 'SLG'], ['ops', 'OPS'],
+];
+function renderTable() {
+  const rows = [...TOTALS].sort((a, b) => {
+    const va = a[sortKey], vb = b[sortKey];
+    return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sortDir;
+  });
+  const tbl = document.getElementById('stats');
+  tbl.innerHTML = '<thead><tr>' + COLS.map(([k, lbl]) =>
+    `<th data-k="${k}" class="${k === sortKey ? 'on' : ''}">${lbl}${k === sortKey ? (sortDir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('') + '</tr></thead>' +
+    '<tbody>' + rows.map(t => `<tr data-p="${esc(t.name)}">` + COLS.map(([k]) => {
+      let v = t[k];
+      if (['avg', 'obp', 'slg', 'ops'].includes(k)) v = fmt3(v);
+      if (k === 'name') v = `${esc(t.name)}${t.jersey ? ` <span style="color:var(--ink-muted)">#${esc(t.jersey)}</span>` : ''}`;
+      return `<td>${v}</td>`;
+    }).join('') + '</tr>').join('') + '</tbody>';
+  tbl.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'name' ? 1 : -1; }
+    renderTable();
+  }));
+  tbl.querySelectorAll('tbody tr').forEach(tr =>
+    tr.addEventListener('click', () => openDetail(tr.dataset.p)));
+}
+
+function openDetail(name) {
+  const t = TOTALS.find(x => x.name === name);
+  if (!t) return;
+  document.getElementById('d-name').textContent = `${t.name}${t.jersey ? ' #' + t.jersey : ''}${t.pos ? ' · ' + t.pos : ''}`;
+  document.getElementById('d-sub').textContent =
+    `${t.g} games · ${fmt3(t.avg)} AVG · ${fmt3(t.obp)} OBP · ${fmt3(t.slg)} SLG · ${t.hr} HR · ${t.rbi} RBI · ${t.sb} SB`;
+  const log = [...t.lines].sort((a, b) => a.date < b.date ? -1 : 1);
+
+  // Sparkline: cumulative AVG after each game
+  let h = 0, ab = 0;
+  const pts = log.map(l => { h += l.h || 0; ab += l.ab || 0; return ab ? h / ab : 0; });
+  const W = 460, Hh = 150, m = {t: 10, r: 10, b: 18, l: 34};
+  const svg = svgEl(W, Hh);
+  const maxV = Math.max(...pts, 0.4);
+  const x = i => m.l + (pts.length === 1 ? 0 : i * (W - m.l - m.r) / (pts.length - 1));
+  const y = v => Hh - m.b - v * (Hh - m.t - m.b) / maxV;
+  [0, 0.25, 0.5].filter(v => v <= maxV).forEach(v => {
+    add(svg, 'line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: 'var(--grid)'});
+    add(svg, 'text', {x: m.l - 4, y: y(v) + 3, 'text-anchor': 'end', class: 'axis'}, fmt3(v));
+  });
+  add(svg, 'path', {d: pts.map((p, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(p)).join(' '),
+    fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2});
+  add(svg, 'circle', {cx: x(pts.length - 1), cy: y(pts[pts.length - 1]), r: 4, fill: 'var(--series-1)'});
+  const sp = document.getElementById('d-spark'); sp.innerHTML = ''; sp.appendChild(svg);
+
+  document.getElementById('d-log').innerHTML =
+    '<thead><tr><th>Date</th><th>Opp</th><th>Line</th></tr></thead><tbody>' +
+    [...log].reverse().map(l =>
+      `<tr style="cursor:default"><td>${esc(l.date)}</td><td>${esc(l.opponent)}</td><td>${esc(lineSummary(l))}</td></tr>`).join('') + '</tbody>';
+
+  const panel = document.getElementById('detail');
+  panel.style.display = 'block';
+  panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+function closeDetail() { document.getElementById('detail').style.display = 'none'; }
+
+load();
+</script>
+</body>
+</html>
