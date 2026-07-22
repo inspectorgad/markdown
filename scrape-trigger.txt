@@ -1,1 +1,1 @@
-nightly scrape: 2026-07-17T09:11:00Z
+manual kick for Jul 21 final: 2026-07-22T10:51:31Z
