@@ -26,7 +26,9 @@ EMBEDDED_MAP = {
     '2b49d93': '2026-06-27', '2b513d8': '2026-06-29', '2b51461': '2026-06-30',
     '2b514ea': '2026-07-01', '2b51573': '2026-07-02', '2b515fc': '2026-07-03',
     '2b51685': '2026-07-04', '2b44ffa': '2026-06-25', '2b7a94c': '2026-07-13', '2b7a9d5': '2026-07-14',
-    '2b7aa5e': '2026-07-15',
+    '2b7aa5e': '2026-07-15', '2b7aae7': '2026-07-16',
+    '2a519a5': '2026-07-09', '2a51a2e': '2026-07-10', '2a51ab7': '2026-07-11',
+    '2b7ab70': '2026-07-19', '2b7abf9': '2026-07-20',
 }
 MONTHS = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
           'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12}
@@ -126,8 +128,12 @@ def opponent_matches(opp, wrap):
     return any(h.lower() in wrap.lower() for h in OPP_HINTS.get(opp, (opp[:6],)))
 
 
-# Game id -> date, from the embedded map plus the site's past-results page.
+# Game id -> date, from the embedded map, the seed's own record of which id
+# produced each game's data (srcId), and the site's past-results page.
 id_to_date = dict(EMBEDDED_MAP)
+for g in seed['games']:
+    if g.get('srcId'):
+        id_to_date[g['srcId']] = g['date']
 try:
     for block in json.load(open('scraped/games.json')):
         mid = re.search(r'/live/([a-z0-9]+)$', block['href'])
@@ -171,8 +177,14 @@ for f in sorted(glob.glob('scraped/box-*.json')):
         print(f'!! {date}: opponent {game["opponent"]} not in line score, skipping',
               file=sys.stderr)
         continue
+    if game.get('srcId') not in (None, gid):
+        continue  # this date's data came from a different game id
     if 'teamScore' not in game:
         game['teamScore'], game['opponentScore'] = res
+        game['srcId'] = gid
+        changed = True
+    elif game.get('srcId') is None:
+        game['srcId'] = gid
         changed = True
     if 'lines' not in game:
         parsed = parse_box_kc(d.get('boxKC', '') or '')
