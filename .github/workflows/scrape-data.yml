@@ -39,6 +39,11 @@ jobs:
       - name: Fold new box scores into seed data
         run: python3 scripts/update-seed.py
 
+      # Cross-check against the official aggregates BEFORE anything is
+      # committed: over-counts (a box score applied twice) fail the run.
+      - name: Verify seed against official stats
+        run: python3 scripts/verify-seed.py
+
       - name: Commit scraped data and seed update
         env:
           GH_TOKEN: ${{ github.token }}
