@@ -95,6 +95,9 @@ W 7-0
 Thu 7/16
 VS. St Louis Gatekeepers
 W 12-2
+Sun 7/19
+VS. Florida Vibe
+L 5-6
 Mon 6/8
 4:00pm
 @ Puerto Rico
@@ -198,9 +201,8 @@ Thu 7/23
 VS. Atlanta Smoke
 L 5-6
 Fri 7/24
-7:35pm
 VS. Atlanta Smoke
-PREVIEW
+L 1-4
 Sat 7/25
 7:35pm
 VS. Atlanta Smoke
@@ -222,10 +224,6 @@ Fri 7/31
 @ St Louis Gatekeepers
 PREVIEW
 Sat 8/1
-7:35pm
-@ St Louis Gatekeepers
-PREVIEW
-Wed 7/29
 7:35pm
 @ St Louis Gatekeepers
 PREVIEW
@@ -265,6 +263,7 @@ Players
 87		Player87	Meg Houk	R	
 77		Ricard	Kasey	R	R
 15		Roupe	Rachel	R	R
+3		Seville	Sydra		
 99		Skaggs	Allie	R	R
 10		Smith	Stephanie	R	
 21		Valdespino	Hope	R	R

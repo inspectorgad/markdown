@@ -6,9 +6,6 @@ Roster
 Team Info
 SCHEDULE
 SHOW / HIDE PAST GAMES
-Sun 7/19
-VS. Florida Vibe
-L 5-6
 Mon 7/20
 VS. Florida Vibe
 W 10-0
@@ -19,9 +16,8 @@ Thu 7/23
 VS. Atlanta Smoke
 L 5-6
 Fri 7/24
-7:35pm
 VS. Atlanta Smoke
-PREVIEW
+L 1-4
 Sat 7/25
 7:35pm
 VS. Atlanta Smoke
@@ -29,6 +25,10 @@ PREVIEW
 Sun 7/26
 7:35pm
 VS. Atlanta Smoke
+PREVIEW
+Wed 7/29
+7:35pm
+@ St Louis Gatekeepers
 PREVIEW
 SHOW / HIDE FUTURE GAMES
 View Team Statistics
@@ -55,6 +55,7 @@ Players
 87		Player87	Meg Houk	R	
 77		Ricard	Kasey	R	R
 15		Roupe	Rachel	R	R
+3		Seville	Sydra		
 99		Skaggs	Allie	R	R
 10		Smith	Stephanie	R	
 21		Valdespino	Hope	R	R
