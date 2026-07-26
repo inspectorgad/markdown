@@ -26,19 +26,19 @@ Batting Statistics
 	GDP
 
 87	Player87, Meg Houk	1.000	1.000	4.000	5.000	1	1	1	1	1	1	0	0	1	0	0	0	0	0	0	0	0
-26	Blampied, Riley	.389	.422	.822	1.244	28	102	90	25	35	32	6	0	11	11	8	0	1	0	0	4	0
-2	McMillan, Cori	.388	.483	.673	1.157	31	122	98	32	38	20	4	0	8	14	19	1	16	2	0	2	1
-99	Skaggs, Allie	.323	.385	.750	1.135	31	109	96	29	31	34	8	0	11	13	10	1	5	0	0	2	0
-16	Pilon, Presleigh	.474	.534	.592	1.126	27	88	76	25	36	13	5	2	0	3	7	4	6	0	0	1	0
-28	Lucas Thornhill, Lauren	.352	.448	.667	1.114	30	67	54	14	19	18	3	1	4	6	11	0	0	0	0	2	0
+26	Blampied, Riley	.402	.438	.859	1.297	29	105	92	26	37	34	6	0	12	11	9	0	1	0	0	4	0
+99	Skaggs, Allie	.323	.384	.768	1.152	32	112	99	30	32	35	8	0	12	13	10	1	5	0	0	2	0
+2	McMillan, Cori	.382	.476	.657	1.133	32	126	102	33	39	20	4	0	8	16	19	1	16	2	0	2	1
 41	Cripe, Hailey	.369	.481	.631	1.112	27	81	65	21	24	16	2	0	5	6	14	1	3	0	0	1	2
+15	Roupe, Rachel	.394	.488	.620	1.108	30	86	71	18	28	15	5	1	3	9	14	0	0	0	0	1	2
 14	Hastings, Alexis	.378	.453	.649	1.102	31	86	74	19	28	24	4	2	4	15	10	1	6	1	0	1	0
-15	Roupe, Rachel	.391	.482	.580	1.062	29	83	69	17	27	14	5	1	2	9	13	0	0	0	0	1	1
-33	Aldridge, Kylie	.382	.456	.596	1.052	28	103	89	23	34	20	4	0	5	1	13	0	3	0	0	1	1
+28	Lucas Thornhill, Lauren	.351	.443	.649	1.092	31	70	57	14	20	18	3	1	4	7	11	0	0	0	0	2	0
+16	Pilon, Presleigh	.456	.522	.570	1.091	28	92	79	25	36	13	5	2	0	3	7	5	6	0	0	1	0
+33	Aldridge, Kylie	.380	.458	.620	1.078	29	107	92	24	35	21	4	0	6	1	14	0	3	0	0	1	1
 25	Brown, Alex	.286	.359	.514	.873	23	40	35	10	10	6	0	1	2	6	3	1	2	1	1	0	0
-7	Kuszak, Ava	.234	.345	.404	.750	22	55	47	10	11	12	0	1	2	11	8	0	1	0	0	0	0
+7	Kuszak, Ava	.220	.328	.380	.708	23	58	50	10	11	12	0	1	2	12	8	0	1	0	0	0	0
 0	Owen, Autumn	.143	.333	.143	.476	10	18	14	2	2	1	0	0	0	7	4	0	0	0	0	0	0
-8	Boggs, Leah	.152	.200	.174	.374	20	50	46	6	7	3	1	0	0	5	3	0	1	0	0	1	0
+8	Boggs, Leah	.143	.189	.163	.352	21	53	49	6	7	3	1	0	0	6	3	0	1	0	0	1	1
 10	Player10, Lauren Sablone	.000	.000	.000	.000	3	1	1	0	0	0	0	0	0	1	0	0	0	0	0	0	0
 10	Smith, Stephanie	.000	1.000	.000	.000	1	1	0	0	0	0	0	0	0	0	1	0	0	0	0	0	0
 Pitching Statistics
@@ -64,10 +64,10 @@ Pitching Statistics
 	STR
 
 13	Heard, Jori	4.48	54.2	7	4	0	60	35	35	44	18	1	241	221	4	2	9	907	577
-22	Henley, Savanah	3.68	40.0	6	2	0	35	30	21	30	10	10	184	161	2	2	8	654	412
-24	Krings, Laurin	3.08	25.0	2	0	1	22	14	11	20	6	2	109	100	4	1	1	389	258
-77	Ricard, Kasey	5.13	30.0	0	1	0	37	22	22	13	10	7	147	130	8	1	6	559	341
-21	Valdespino, Hope	2.64	50.1	7	2	0	35	20	19	47	12	9	205	182	9	0	6	831	544
+22	Henley, Savanah	4.07	43.0	6	3	0	38	34	25	32	11	11	199	174	3	2	9	707	448
+24	Krings, Laurin	3.25	28.0	2	0	1	27	17	13	20	8	2	125	114	4	1	1	440	288
+77	Ricard, Kasey	6.30	30.0	0	1	0	41	27	27	13	12	7	153	134	9	1	7	579	351
+21	Valdespino, Hope	2.59	51.1	7	2	0	35	20	19	48	13	9	209	185	9	0	6	850	556
 Fielding Statistics
 #
 	FIELDER
@@ -81,8 +81,8 @@ Fielding Statistics
 	PB
 	CI
 
-33	Aldridge, Kylie	118	5	2	6	0.984	0	0	2	0
-26	Blampied, Riley	41	1	1	1	0.977	0	0	0	0
+33	Aldridge, Kylie	121	6	2	6	0.984	0	1	2	0
+26	Blampied, Riley	48	1	1	1	0.980	0	0	0	0
 8	Boggs, Leah	94	2	2	0	0.980	0	4	5	0
 25	Brown, Alex	18	5	1	1	0.958	0	0	0	0
 41	Cripe, Hailey	27	21	4	3	0.923	0	0	0	0
@@ -90,13 +90,13 @@ Fielding Statistics
 13	Heard, Jori	3	2	0	0	1.000	0	0	0	0
 22	Henley, Savanah	1	2	1	0	0.750	0	0	0	0
 24	Krings, Laurin	3	4	0	0	1.000	0	0	0	0
-7	Kuszak, Ava	18	20	6	1	0.864	0	0	0	0
-28	Lucas Thornhill, Lauren	14	1	0	0	1.000	0	0	0	0
-2	McMillan, Cori	44	0	1	0	0.978	0	0	0	0
+7	Kuszak, Ava	18	21	6	1	0.867	0	0	0	0
+28	Lucas Thornhill, Lauren	15	1	0	0	1.000	0	0	0	0
+2	McMillan, Cori	49	0	2	0	0.961	0	0	0	0
 0	Owen, Autumn	44	0	0	0	1.000	0	3	0	0
-16	Pilon, Presleigh	38	26	4	1	0.941	0	0	0	0
+16	Pilon, Presleigh	39	28	4	1	0.944	0	0	0	0
 77	Ricard, Kasey	4	4	0	0	1.000	0	1	0	0
-15	Roupe, Rachel	30	1	0	0	1.000	0	0	0	0
-99	Skaggs, Allie	57	47	1	8	0.990	0	0	0	0
+15	Roupe, Rachel	32	1	0	0	1.000	0	0	0	0
+99	Skaggs, Allie	59	48	2	8	0.982	0	0	0	0
 10	Smith, Stephanie	2	0	0	0	1.000	0	0	0	0
 21	Valdespino, Hope	2	0	0	0	1.000	0	0	0	0
