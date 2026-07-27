@@ -1,1 +1,1 @@
-manual kick for Jul 21 final: 2026-07-22T10:51:31Z
+kick 2026-07-27T11:42:50Z (cron ran late; fetching today's results)
