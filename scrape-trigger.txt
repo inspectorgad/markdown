@@ -1,1 +1,1 @@
-kick 2026-07-27T11:42:50Z (cron ran late; fetching today's results)
+catch-up kick for Jul 29-30: 2026-07-31T02:06:43Z

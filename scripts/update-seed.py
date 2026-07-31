@@ -148,6 +148,35 @@ except FileNotFoundError:
 games_by_date = {g['date']: g for g in seed['games']}
 today = datetime.date.today().isoformat()
 
+# --- Reconcile retractions -------------------------------------------------
+# BallClubz sometimes corrects a published box score (a mis-entered player is
+# removed). A seed line the source no longer lists would otherwise inflate our
+# totals above the official aggregates forever, so drop it. Only games whose
+# data this pipeline owns (srcId set) and whose snapshot still parses are
+# touched; numbers are never rewritten, lines are only removed.
+snapshot_by_id = {}
+for f in glob.glob('scraped/box-*.json'):
+    d = json.load(open(f))
+    gid_ = d.get('id') or d['url'].rsplit('/', 1)[1]
+    snapshot_by_id[gid_] = d.get('boxKC', '') or ''
+
+for g in seed['games']:
+    gid_ = g.get('srcId')
+    if not gid_ or 'lines' not in g:
+        continue
+    box = snapshot_by_id.get(gid_, '')
+    if 'Batters\t' not in box:
+        continue  # no usable snapshot; leave the game alone
+    present = parse_box_kc(box) or {}
+    if not present:
+        continue
+    stale = [l for l in g['lines'] if l['player'] not in present]
+    if stale:
+        g['lines'] = [l for l in g['lines'] if l['player'] in present]
+        changed = True
+        for l in stale:
+            print(f"retracted upstream: dropped {l['player']} from {g['date']}")
+
 for f in sorted(glob.glob('scraped/box-*.json')):
     d = json.load(open(f))
     gid = d.get('id') or d['url'].rsplit('/', 1)[1]

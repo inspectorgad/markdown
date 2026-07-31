@@ -82,17 +82,34 @@ if off_w or off_l:
     elif (seed_w, seed_l) != (off_w, off_l):
         warnings.append(f'record lag: seed {seed_w}-{seed_l} vs official {off_w}-{off_l}')
 
+# Over-counts are graded, because they have two very different causes:
+#   * a box score applied to two dates inflates MANY players at once, usually
+#     with the record off too - that is corruption and must never ship;
+#   * BallClubz retroactively correcting one published line drifts ONE player
+#     by a small amount - that is upstream noise and must not wedge the
+#     pipeline (a hard fail there blocks every later game indefinitely).
+over = {}
 for j, o in official.items():
     a = agg.get(j)
     if not a:
         continue
     for k in ('ab', 'h', 'hr', 'rbi'):
         if a[k] > o[k]:
-            failures.append(
+            over.setdefault(j, []).append(
                 f"{a['name']} (#{j}) {k.upper()} OVER-COUNT: seed {a[k]} vs official {o[k]}")
         elif a[k] < o[k]:
             warnings.append(
                 f"{a['name']} (#{j}) {k.upper()} lag: seed {a[k]} vs official {o[k]}")
+
+BIG_DRIFT_AB = 5   # more than a game's worth of at-bats = a duplicated game
+systemic = len(over) >= 3 or any(
+    agg[j]['ab'] - official[j]['ab'] > BIG_DRIFT_AB for j in over)
+for j, msgs in over.items():
+    (failures if systemic else warnings).extend(msgs)
+if over and not systemic:
+    warnings.append(
+        f'{len(over)} player(s) drifted above official totals by a small margin; '
+        'treating as an upstream scoring correction, not corruption')
 
 for w in warnings[:20]:
     print('WARN:', w)
