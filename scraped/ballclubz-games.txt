@@ -6,19 +6,15 @@ Roster
 Team Info
 SCHEDULE
 SHOW / HIDE PAST GAMES
-Fri 7/24
-VS. Atlanta Smoke
-L 1-4
-Sat 7/25
-VS. Atlanta Smoke
-L 6-12
 Sun 7/26
 VS. Atlanta Smoke
 L 3-11
 Wed 7/29
-7:35pm
 @ St Louis Gatekeepers
-PREVIEW
+W 9-1
+Wed 7/29
+@ St Louis Gatekeepers
+L 5-6
 Thu 7/30
 7:35pm
 @ St Louis Gatekeepers
@@ -42,6 +38,7 @@ Players
 14		Hastings	Alexis	L	L
 13		Heard	Jori	R	R
 22		Henley	Savanah	L	L
+87		Houk	Meaghan		
 24		Krings	Laurin	R	R
 7		Kuszak	Ava	R	R
 28		Lucas Thornhill	Lauren	L	R
@@ -58,6 +55,7 @@ Players
 3		Seville	Sydra		
 99		Skaggs	Allie	R	R
 10		Smith	Stephanie	R	
+11		Trivelpiece	Marissa	L	R
 21		Valdespino	Hope	R	R
 TEAM INFO
 Kansas City, MO
