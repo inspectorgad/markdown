@@ -951,21 +951,6 @@
           "sb": 0
         },
         {
-          "player": "Kylie Aldridge",
-          "ab": 3,
-          "r": 0,
-          "h": 0,
-          "2b": 0,
-          "3b": 0,
-          "hr": 0,
-          "rbi": 0,
-          "bb": 0,
-          "so": 0,
-          "hbp": 0,
-          "sf": 0,
-          "sb": 0
-        },
-        {
           "player": "Ava Kuszak",
           "ab": 2,
           "r": 0,
@@ -6020,5 +6005,5 @@
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-07-31T02:22:04Z"
+  "generatedAt": "2026-07-31T11:46:47Z"
 }
