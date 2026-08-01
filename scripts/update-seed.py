@@ -49,8 +49,18 @@ CANONICAL_OPP = {
 seed = json.load(open(SEED))
 jersey_to_name = {p['jerseyNumber']: p['name'] for p in seed['players'] if p['jerseyNumber']}
 last_to_name = {p['name'].split()[-1].upper(): p['name'] for p in seed['players']}
-last_to_name.update({'LUCAS': 'Lauren Lucas Thornhill', 'THORNHILL': 'Lauren Lucas Thornhill',
-                     'PLAYER10': 'Stephanie Smith', 'PLAYER87': 'Meg Houk'})
+last_to_name.update({'LUCAS': 'Lauren Lucas Thornhill', 'THORNHILL': 'Lauren Lucas Thornhill'})
+
+# Box-score identities that refer to a player already on the roster under a
+# different rendering (placeholder rows, misspellings, short/long first names).
+# Keyed by "LAST|First" exactly as the box score renders it.
+ROW_ALIASES = {
+    'PLAYER87|Meg': 'Meg Houk',
+    'HOUK|Meaghan': 'Meg Houk',
+    'PLAYER10|Lauren': 'Stephanie Smith',
+    'MARCIENO|Brianna': 'Briana Marcelino',
+    'LUCAS|Lauren': 'Lauren Lucas Thornhill',
+}
 known_names = {p['name'] for p in seed['players']}
 changed = False
 
@@ -73,19 +83,34 @@ def parse_box_kc(text):
         m = re.match(r'^\s*[0-9F]*\s*\t?([A-Z][A-Z0-9 \'.-]+) #(\d+)$', row.strip())
         if m:
             detail = lines[i + 1] if i + 1 < len(lines) else ''
-            name = jersey_to_name.get(m.group(2)) or last_to_name.get(m.group(1).split()[0])
-            if not name and detail.strip():
-                first = detail.split('\t')[0].strip().split()[0]
-                last = m.group(1).split()[0].title()
-                if first:
-                    name = f'{first} {last}'
-                    if name not in known_names:
-                        seed['players'].append(
-                            {'name': name, 'jerseyNumber': m.group(2), 'position': ''})
-                        known_names.add(name)
-                        changed = True
-                    jersey_to_name[m.group(2)] = name
-                    last_to_name[last.upper()] = name
+            # Identity comes from the row's own name text. Jersey numbers are
+            # reused across players during a season, so they cannot key a
+            # player - they are recorded as an attribute only.
+            last_raw = m.group(1).split()[0].upper()
+            first_raw = detail.split('\t')[0].strip().split()[0] if detail.strip() else ''
+            name = ROW_ALIASES.get(f'{last_raw}|{first_raw.title()}')
+            if not name and re.fullmatch(r'PLAYER\d+', last_raw):
+                # Placeholder row (the scorer had no name yet): the jersey is
+                # the only identity signal available, so use the roster's.
+                name = jersey_to_name.get(m.group(2))
+            if not name and first_raw:
+                candidate = f'{first_raw.title()} {last_raw.title()}'
+                match = next((n for n in known_names if n.lower() == candidate.lower()), None)
+                if not match:
+                    # A roster name that ends in this surname and shares the
+                    # first name (handles compound surnames like Lucas Thornhill).
+                    match = next(
+                        (n for n in known_names
+                         if n.upper().endswith(last_raw)
+                         and n.split()[0].lower() == first_raw.lower()), None)
+                name = match or candidate
+                if name not in known_names:
+                    seed['players'].append(
+                        {'name': name, 'jerseyNumber': m.group(2), 'position': ''})
+                    known_names.add(name)
+                    changed = True
+            if not name:
+                name = last_to_name.get(last_raw)  # last resort
             nums = detail.split('\t')[1:]
             if name and len(nums) >= 7:
                 vals = [int(x) if x.strip().isdigit() else 0 for x in nums[:7]]
@@ -168,14 +193,25 @@ for g in seed['games']:
     if 'Batters\t' not in box:
         continue  # no usable snapshot; leave the game alone
     present = parse_box_kc(box) or {}
-    if not present:
-        continue
-    stale = [l for l in g['lines'] if l['player'] not in present]
-    if stale:
-        g['lines'] = [l for l in g['lines'] if l['player'] in present]
+    if len(present) < 8:
+        continue  # partial/unparsed snapshot: never clobber good data with it
+    rebuilt = []
+    for nm, c in present.items():
+        if c['pa'] == 0 and c['ab'] == 0 and c['r'] == 0:
+            continue
+        rebuilt.append({'player': nm, 'ab': c['ab'], 'r': c['r'], 'h': c['h'],
+                        '2b': c['2b'], '3b': c['3b'], 'hr': c['hr'], 'rbi': c['rbi'],
+                        'bb': c['bb'], 'so': c['so'], 'hbp': c['hbp'], 'sf': c['sf'],
+                        'sb': c['sb']})
+    if rebuilt and rebuilt != g['lines']:
+        before = {l['player'] for l in g['lines']}
+        after = {l['player'] for l in rebuilt}
+        for nm in sorted(before - after):
+            print(f're-derived {g["date"]}: dropped {nm}')
+        for nm in sorted(after - before):
+            print(f're-derived {g["date"]}: added {nm}')
+        g['lines'] = rebuilt
         changed = True
-        for l in stale:
-            print(f"retracted upstream: dropped {l['player']} from {g['date']}")
 
 for f in sorted(glob.glob('scraped/box-*.json')):
     d = json.load(open(f))

@@ -29,6 +29,24 @@ if 'Batting Statistics' not in stats_txt or 'Pitching Statistics' not in stats_t
 
 # --- official batting totals, keyed by jersey number ---
 # Row shape: jersey \t "Last, First" \t AVG OBP SLG OPS G PA AB R H RBI ...
+# Same-person aliases as the parser uses, so a placeholder row and the real
+# name fold into one identity.
+NAME_ALIASES = {
+    'player87, meg houk': 'Meg Houk',
+    'houk, meaghan': 'Meg Houk',
+    'player10, lauren': 'Stephanie Smith',
+    'marcieno, brianna': 'Briana Marcelino',
+}
+
+def canonical(official_name):
+    key = official_name.strip().lower()
+    if key in NAME_ALIASES:
+        return NAME_ALIASES[key]
+    if ',' in official_name:
+        last, first = [x.strip() for x in official_name.split(',', 1)]
+        return f'{first.title()} {last.title()}'
+    return official_name.strip()
+
 official = {}
 batting_part = stats_txt.split('Batting Statistics')[1].split('Pitching Statistics')[0]
 for line in batting_part.split('\n'):
@@ -40,8 +58,11 @@ for line in batting_part.split('\n'):
             hr = int(nums[12])
         except (ValueError, IndexError):
             continue
-        official[cells[0].strip()] = {
-            'name': cells[1].strip(), 'ab': ab, 'h': h, 'hr': hr, 'rbi': rbi}
+        # Key by person, summing rows (a jersey can be worn by several players,
+        # and one player can appear under two renderings).
+        key = canonical(cells[1])
+        o = official.setdefault(key, {'name': key, 'ab': 0, 'h': 0, 'hr': 0, 'rbi': 0})
+        o['ab'] += ab; o['h'] += h; o['hr'] += hr; o['rbi'] += rbi
 
 # --- official record from pitching W/L columns ---
 # Row shape: jersey \t "Last, First"? -> in text export names may wrap; rely on
@@ -60,7 +81,6 @@ for line in pitching_part.split('\n'):
             break
 
 # --- seed-side aggregates ---
-jersey_of = {p['name']: p['jerseyNumber'] for p in seed['players']}
 agg = {}
 seed_w = seed_l = 0
 for g in seed['games']:
@@ -69,8 +89,8 @@ for g in seed['games']:
         if ts > os_: seed_w += 1
         elif ts < os_: seed_l += 1
     for l in g.get('lines', []):
-        j = jersey_of.get(l['player'], '')
-        a = agg.setdefault(j, {'ab': 0, 'h': 0, 'hr': 0, 'rbi': 0, 'name': l['player']})
+        a = agg.setdefault(l['player'],
+                           {'ab': 0, 'h': 0, 'hr': 0, 'rbi': 0, 'name': l['player']})
         for k in ('ab', 'h', 'hr', 'rbi'):
             a[k] += l.get(k, 0)
 
@@ -96,14 +116,13 @@ for j, o in official.items():
     for k in ('ab', 'h', 'hr', 'rbi'):
         if a[k] > o[k]:
             over.setdefault(j, []).append(
-                f"{a['name']} (#{j}) {k.upper()} OVER-COUNT: seed {a[k]} vs official {o[k]}")
+                f"{a['name']} {k.upper()} OVER-COUNT: seed {a[k]} vs official {o[k]}")
         elif a[k] < o[k]:
             warnings.append(
-                f"{a['name']} (#{j}) {k.upper()} lag: seed {a[k]} vs official {o[k]}")
+                f"{a['name']} {k.upper()} lag: seed {a[k]} vs official {o[k]}")
 
-BIG_DRIFT_AB = 5   # more than a game's worth of at-bats = a duplicated game
-systemic = len(over) >= 3 or any(
-    agg[j]['ab'] - official[j]['ab'] > BIG_DRIFT_AB for j in over)
+# A duplicated game shows up as a wrong record and/or a whole lineup drifting.
+systemic = len(over) >= 3 or seed_w > off_w or seed_l > off_l
 for j, msgs in over.items():
     (failures if systemic else warnings).extend(msgs)
 if over and not systemic:
