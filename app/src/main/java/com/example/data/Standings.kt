@@ -21,6 +21,45 @@ data class StandingsRow(
         if (runsFor != null && runsAgainst != null) runsFor - runsAgainst else null
 }
 
+/**
+ * KC's record against one opponent, derived from our own scored games.
+ *
+ * The PSL publishes no league table (every standings URL is a 404 or an empty
+ * page), so this is the only win-loss data we can state truthfully: it comes
+ * from box scores we hold, not from a source that ranks the other clubs.
+ */
+data class OpponentRecord(
+    val opponent: String,
+    val wins: Int,
+    val losses: Int,
+    val ties: Int,
+    val runsFor: Int,
+    val runsAgainst: Int
+) {
+    val played: Int get() = wins + losses + ties
+    val winPct: Double
+        get() = if (played == 0) 0.0 else (wins + ties * 0.5) / played
+    val runDiff: Int get() = runsFor - runsAgainst
+}
+
+/** Roll up finished games into a per-opponent record, best win pct first. */
+fun opponentRecords(games: List<Game>): List<OpponentRecord> =
+    games.filter { it.teamScore != null && it.opponentScore != null }
+        .groupBy { it.opponent }
+        .map { (opponent, played) ->
+            OpponentRecord(
+                opponent = opponent,
+                wins = played.count { it.teamScore!! > it.opponentScore!! },
+                losses = played.count { it.teamScore!! < it.opponentScore!! },
+                ties = played.count { it.teamScore!! == it.opponentScore!! },
+                runsFor = played.sumOf { it.teamScore!! },
+                runsAgainst = played.sumOf { it.opponentScore!! }
+            )
+        }
+        .sortedWith(
+            compareByDescending<OpponentRecord> { it.winPct }.thenByDescending { it.played }
+        )
+
 /** Games behind the leader, standard baseball convention. */
 fun gamesBehind(leader: StandingsRow, row: StandingsRow): Double =
     ((leader.wins - row.wins) + (row.losses - leader.losses)) / 2.0

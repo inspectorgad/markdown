@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.DiamondsViewModel
+import com.example.data.opponentRecords
 
 enum class Tab(val label: String) {
     Roster("Roster"), Games("Games"), Leaders("Leaders"), Standings("Standings")
@@ -145,7 +146,8 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
 
                     Tab.Standings -> StandingsScreen(
                         standings = standings,
-                        dataUpdatedAt = dataUpdatedAt
+                        dataUpdatedAt = dataUpdatedAt,
+                        opponentRecords = remember(games) { opponentRecords(games) }
                     )
                 }
             }

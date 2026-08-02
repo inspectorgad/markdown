@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.OpponentRecord
 import com.example.data.StandingsRow
 import com.example.data.gamesBehind
 import com.example.stats.formatAverage
@@ -38,15 +39,13 @@ private val CELL_W = 46.dp
 fun StandingsScreen(
     standings: List<StandingsRow>,
     modifier: Modifier = Modifier,
-    dataUpdatedAt: String? = null
+    dataUpdatedAt: String? = null,
+    opponentRecords: List<OpponentRecord> = emptyList()
 ) {
+    // The league table is the real thing when it exists; until the PSL
+    // publishes one we show what we can actually stand behind.
     if (standings.isEmpty()) {
-        EmptyState(
-            title = "Standings not available",
-            subtitle = "The league table appears here once the PSL publishes it. " +
-                "Pull down to check for an update.",
-            modifier = modifier.fillMaxSize()
-        )
+        OwnRecordScreen(opponentRecords, dataUpdatedAt, modifier)
         return
     }
 
@@ -149,6 +148,169 @@ fun StandingsScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Fallback shown while no league table exists. Every number here is derived
+ * from the Diamonds' own box scores, so nothing is guessed about how the rest
+ * of the league is doing — the note says so plainly.
+ */
+@Composable
+private fun OwnRecordScreen(
+    records: List<OpponentRecord>,
+    dataUpdatedAt: String?,
+    modifier: Modifier = Modifier
+) {
+    if (records.isEmpty()) {
+        EmptyState(
+            title = "Standings not available",
+            subtitle = "The league table appears here once the PSL publishes it. " +
+                "Pull down to check for an update.",
+            modifier = modifier.fillMaxSize()
+        )
+        return
+    }
+
+    val wins = records.sumOf { it.wins }
+    val losses = records.sumOf { it.losses }
+    val ties = records.sumOf { it.ties }
+    val runsFor = records.sumOf { it.runsFor }
+    val runsAgainst = records.sumOf { it.runsAgainst }
+    val played = wins + losses + ties
+    val pct = if (played == 0) 0.0 else (wins + ties * 0.5) / played
+    val scroll = rememberScrollState()
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = ListContentPadding,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Text(
+                "KC Diamonds — 2026",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            dataUpdatedAt?.let {
+                Text(
+                    "Updated ${it.take(10)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    SummaryStat("RECORD", if (ties > 0) "$wins-$losses-$ties" else "$wins-$losses")
+                    SummaryStat("PCT", formatAverage(pct))
+                    SummaryStat("RF", runsFor.toString())
+                    SummaryStat("RA", runsAgainst.toString())
+                    SummaryStat(
+                        "DIFF",
+                        (runsFor - runsAgainst).let { if (it > 0) "+$it" else it.toString() }
+                    )
+                }
+            }
+        }
+
+        item {
+            Text(
+                "Record by opponent",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.horizontalScroll(scroll)) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HeaderCell("Opponent", TEAM_W, TextAlign.Start)
+                        HeaderCell("W", CELL_W)
+                        HeaderCell("L", CELL_W)
+                        HeaderCell("PCT", CELL_W + 8.dp)
+                        HeaderCell("RF", CELL_W)
+                        HeaderCell("RA", CELL_W)
+                        HeaderCell("DIFF", CELL_W + 6.dp)
+                    }
+                    HorizontalDivider()
+                    records.forEach { row ->
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                row.opponent,
+                                modifier = Modifier.width(TEAM_W),
+                                fontSize = 13.sp,
+                                maxLines = 1
+                            )
+                            BodyCell(row.wins.toString(), CELL_W, bold = true)
+                            BodyCell(row.losses.toString(), CELL_W)
+                            BodyCell(formatAverage(row.winPct), CELL_W + 8.dp)
+                            BodyCell(row.runsFor.toString(), CELL_W)
+                            BodyCell(row.runsAgainst.toString(), CELL_W)
+                            BodyCell(
+                                row.runDiff.let { if (it > 0) "+$it" else it.toString() },
+                                CELL_W + 6.dp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Text(
+                    "The PSL does not publish a league table, so the other clubs' " +
+                        "records aren't available. Everything above is the Diamonds' " +
+                        "own record, counted from the $played games we hold box " +
+                        "scores or finals for. A full league table will appear here " +
+                        "automatically if the league starts publishing one.",
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryStat(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
