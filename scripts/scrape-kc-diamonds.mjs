@@ -98,13 +98,16 @@ async function collectLogo() {
         .map((i) => ({ src: i.currentSrc || i.src, alt: i.alt || '', w: i.naturalWidth, h: i.naturalHeight }))
         .filter((i) => i.src && i.w >= 100));
     fs.writeFileSync('scraped/logo-candidates.json', JSON.stringify(srcs, null, 2));
-    // Prefer square-ish art whose filename/alt mentions the team or a logo.
+    // Every press photo is named "KCDiamonds_OpeningDay_...", so matching on
+    // "diamond" scores the whole gallery and buries the actual mark. Match only
+    // on words that mean *logo*, and require a near-square crop.
+    const isMark = (i) => /(logo|wordmark|crest|badge|emblem)/i.test(i.src + ' ' + i.alt);
+    const seen = new Set();
     const scored = srcs
       .map((i) => ({ ...i, ratio: i.w / Math.max(1, i.h) }))
+      .filter((i) => !seen.has(i.src) && seen.add(i.src))
       .filter((i) => i.ratio > 0.6 && i.ratio < 1.7)
-      .sort((a, b) => (/(logo|diamond|mark|icon)/i.test(b.src + b.alt) ? 1 : 0) -
-                      (/(logo|diamond|mark|icon)/i.test(a.src + a.alt) ? 1 : 0) ||
-                      b.w - a.w);
+      .sort((a, b) => (isMark(b) - isMark(a)) || (b.w - a.w));
     let i = 0;
     for (const cand of scored.slice(0, 4)) {
       try {
