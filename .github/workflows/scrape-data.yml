@@ -55,7 +55,14 @@ jobs:
           SEED_CHANGED=0
           git add app/src/main/assets/seed.json
           git diff --cached --quiet || { git commit -m "Update season data from nightly scrape"; SEED_CHANGED=1; }
-          git push
+          # A scrape takes ~15 minutes, so main may have moved on while it ran.
+          # Rebase onto whatever landed and retry rather than losing the run.
+          for attempt in 1 2 3; do
+            if git push; then break; fi
+            echo "push rejected (attempt $attempt); rebasing onto origin/main"
+            git pull --rebase origin main
+            sleep 3
+          done
           # Pushes made with GITHUB_TOKEN do not trigger other workflows, so
           # the in-app sync feed must be refreshed from here directly.
           if [ "$SEED_CHANGED" = "1" ]; then
