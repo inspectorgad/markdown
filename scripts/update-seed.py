@@ -278,6 +278,11 @@ SCHEDULE_FILES = ('scraped/schedule.txt', 'scraped/past-results.txt')
 NOISE = ('TICKETS', 'LIVE FEED', 'FCSN', 'PLUTOTV', 'BOX SCORE', 'VS.')
 # Tokens the site writes in caps that must stay caps when a name is title-cased.
 KEEP_CAPS = {'KU', 'KC', 'TBD', 'NY', 'PSL', 'MU'}
+# Some blocks put a box-office sales pitch where the promo name usually goes.
+# That is not an event, so it must not land in the game's event field.
+EVENT_JUNK = re.compile(
+    r'group ticket|call \d{3}[-.]|\bcall us\b|\btickets?\b.*\bavailable\b',
+    re.I)
 
 
 def smart_title(raw):
@@ -339,6 +344,12 @@ def parse_schedule():
             if location and location.upper() == 'TBD':
                 location = None          # venue not announced yet
             event = fields[2] if len(fields) > 2 else None
+            if event and EVENT_JUNK.search(event):
+                event = None
+            # Championship week is listed as bare TBD matchups at a neutral
+            # site; the site never names the bracket, so label it ourselves.
+            if not event and season_for(date, opponent) == '2026 Postseason':
+                event = 'PSL Championship'
             prev = out.get(date, {})
             out[date] = {
                 'opponent': opponent,
@@ -364,6 +375,10 @@ if scheduled:
             changed = True
             print(f"schedule: added {date} vs {game['opponent']} ({game['season']})")
         else:
+            # Retract a sales pitch an earlier run mistook for an event name.
+            if game.get('event') and EVENT_JUNK.search(game['event']):
+                del game['event']
+                changed = True
             # Fill in details the site publishes later without touching results.
             for key, val in (('event', info.get('event')),
                              ('location', info.get('location'))):

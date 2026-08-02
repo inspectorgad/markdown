@@ -5912,7 +5912,6 @@
           "sb": 0
         }
       ],
-      "event": "For group ticket information call 636-741-4668",
       "location": "St. Louis, MO"
     },
     {
@@ -6089,7 +6088,6 @@
           "sb": 0
         }
       ],
-      "event": "For group ticket information call 636-741-4668",
       "location": "St. Louis, MO"
     },
     {
@@ -6403,25 +6401,29 @@
       "date": "2026-08-05",
       "opponent": "TBD",
       "season": "2026 Postseason",
-      "location": "6450 Husky Pkwy, Trussville, AL 35173"
+      "location": "6450 Husky Pkwy, Trussville, AL 35173",
+      "event": "PSL Championship"
     },
     {
       "date": "2026-08-06",
       "opponent": "TBD",
       "season": "2026 Postseason",
-      "location": "6450 Husky Pkwy, Trussville, AL 35173"
+      "location": "6450 Husky Pkwy, Trussville, AL 35173",
+      "event": "PSL Championship"
     },
     {
       "date": "2026-08-07",
       "opponent": "TBD",
       "season": "2026 Postseason",
-      "location": "6450 Husky Pkwy, Trussville, AL 35173"
+      "location": "6450 Husky Pkwy, Trussville, AL 35173",
+      "event": "PSL Championship"
     },
     {
       "date": "2026-08-08",
       "opponent": "TBD",
       "season": "2026 Postseason",
-      "location": "6450 Husky Pkwy, Trussville, AL 35173"
+      "location": "6450 Husky Pkwy, Trussville, AL 35173",
+      "event": "PSL Championship"
     },
     {
       "date": "2026-10-10",
@@ -6437,5 +6439,5 @@
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-08-02T14:58:11Z"
+  "generatedAt": "2026-08-02T15:03:18Z"
 }
