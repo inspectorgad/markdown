@@ -75,6 +75,36 @@ svg text { font-family: inherit; }
 .lb-bar { height: 14px; border-radius: 0 4px 4px 0; background: var(--seq); min-width: 2px; }
 .lb-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 
+/* Upcoming schedule */
+.sched { display: grid; gap: 8px; }
+.sch {
+  display: grid; grid-template-columns: 92px 1fr auto; align-items: baseline; gap: 4px 14px;
+  padding: 10px 12px; border: 1px solid var(--ring); border-radius: 9px;
+  border-left: 3px solid var(--baseline);
+}
+.sch.post { border-left-color: var(--series-1); }
+.sch .d { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sch .d span { display: block; font-weight: 400; font-size: 11px; color: var(--ink-muted); }
+.sch .o { font-size: 14px; font-weight: 600; }
+.sch .meta { grid-column: 2 / -1; font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+.sch .meta em { font-style: normal; color: var(--ink-muted); }
+.badge {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--ink-2) 12%, transparent); color: var(--ink-2);
+}
+.badge.post { background: color-mix(in srgb, var(--series-1) 14%, transparent); color: var(--series-1); }
+
+/* Diverging run-differential bar inside a table cell */
+.dbar { position: relative; height: 14px; min-width: 140px; }
+/* min-width keeps a small-but-real differential from rendering sub-pixel */
+.dbar i { position: absolute; top: 0; height: 14px; min-width: 3px; }
+.dbar .mid { left: 50%; top: -3px; width: 1px; height: 20px; background: var(--baseline); }
+.dbar .pos { left: 50%; background: var(--div-pos); border-radius: 0 4px 4px 0; }
+.dbar .neg { right: 50%; background: var(--div-neg); border-radius: 4px 0 0 4px; }
+/* This table isn't sortable, so its headers shouldn't invite a click. */
+#opp th { cursor: default; }
+
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 7px 9px; text-align: right; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--grid); }
 th { color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; background: var(--surface-1); }
@@ -121,6 +151,17 @@ footer { color: var(--ink-muted); font-size: 12px; margin-top: 8px; line-height:
     <div class="strip" id="strip"></div>
   </div>
 
+  <div class="card" id="upcoming-card">
+    <h2>Still to come <small>— postseason and fall dates, straight off the published schedule</small></h2>
+    <div class="sched" id="upcoming"></div>
+  </div>
+
+  <div class="card">
+    <h2>Record by opponent
+      <small>— the PSL publishes no league table, so these are the Diamonds' own results</small></h2>
+    <div class="tblwrap" style="max-height:none"><table id="opp"></table></div>
+  </div>
+
   <div class="grid2">
     <div class="card"><h2>Cumulative wins</h2><div id="c-wins"></div></div>
     <div class="card"><h2>Run differential by game <small>— blue: Diamonds ahead · red: opponent</small></h2><div id="c-diff"></div></div>
@@ -150,6 +191,9 @@ footer { color: var(--ink-muted); font-size: 12px; margin-top: 8px; line-height:
     Data: official KC Diamonds stats (BallClubz), refreshed nightly by the automated pipeline.
     Rate stats: AVG = H/AB · OBP = (H+BB+HBP)/(AB+BB+HBP+SF) · SLG = TB/AB · OPS = OBP+SLG.
     Four games (Jun 25, Jul 9–11) have final scores but no published box scores; exhibition games have no published data.
+    The PSL publishes no league standings, so no table of other clubs' records is shown — “Record by opponent” is the
+    Diamonds' own results, counted from these games. Schedule, venues and promo nights come from the team's published
+    schedule and update automatically as dates are added.
     <span id="f-src"></span>
   </footer>
 </div>
@@ -239,12 +283,15 @@ function render() {
   // Team tiles
   const allLines = games.flatMap(g => g.lines || []);
   const team = agg(allLines);
+  const home = PLAYED.filter(isHome), away = PLAYED.filter(g => !isHome(g));
   const tiles = [
     ['Team AVG', fmt3(team.avg)], ['OBP', fmt3(team.obp)], ['SLG', fmt3(team.slg)], ['OPS', fmt3(team.ops)],
     ['Runs / game', (rf / Math.max(1, PLAYED.length)).toFixed(1)],
     ['Runs allowed / game', (ra / Math.max(1, PLAYED.length)).toFixed(1)],
     ['Shutouts thrown', PLAYED.filter(g => g.opponentScore === 0).length],
     ['Home runs', team.hr],
+    ['At Legends Field', record(home)],
+    ['On the road', record(away)],
   ];
   document.getElementById('tiles').innerHTML = tiles.map(
     ([k, v]) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
@@ -268,12 +315,15 @@ function render() {
         top = `<br>Top: ${esc(best.player)} — ${esc(lineSummary(best))}`;
       }
       showTT(`<b>${esc(g.date)} vs ${esc(g.opponent)}</b>` +
-        (g.teamScore != null ? `Final ${g.teamScore}–${g.opponentScore}${top}` : 'No published box score'), ev.clientX, ev.clientY);
+        (g.teamScore != null ? `Final ${g.teamScore}–${g.opponentScore}${top}` : 'No published box score') +
+        venueLine(g), ev.clientX, ev.clientY);
     });
     d.addEventListener('mouseleave', hideTT);
     strip.appendChild(d);
   }
 
+  renderUpcoming(games);
+  renderOpponents(PLAYED);
   renderWinsChart(PLAYED);
   renderDiffChart(PLAYED);
 
@@ -288,6 +338,91 @@ function render() {
 
   renderLeaders();
   renderTable();
+}
+
+// Every home date the team has played is at Legends Field; anything else is a
+// road or neutral site. Games captured before venues were scraped have no
+// location at all, so they count as away rather than being silently dropped.
+const isHome = g => /Legends Field/i.test(g.location || '');
+const record = gs => {
+  const w = gs.filter(g => g.teamScore > g.opponentScore).length;
+  return `${w}-${gs.length - w}`;
+};
+const venueLine = g =>
+  (g.event ? `<br>${esc(g.event)}` : '') + (g.location ? `<br>${esc(g.location)}` : '');
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function prettyDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  // Build in UTC so the label never slips a day in a western timezone.
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return {day: `${MON[m - 1]} ${d}`, dow: DOW[dt.getUTCDay()]};
+}
+
+function renderUpcoming(games) {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = games.filter(g => g.date > today && g.teamScore == null);
+  const card = document.getElementById('upcoming-card');
+  if (!rows.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('upcoming').innerHTML = rows.map(g => {
+    const {day, dow} = prettyDate(g.date);
+    const post = /Postseason/i.test(g.season);
+    const label = post ? 'Postseason' : /Fall/i.test(g.season) ? 'Fall' : g.season;
+    // A bracket that hasn't been drawn yet says so, rather than showing "vs TBD".
+    const foe = g.opponent && g.opponent !== 'TBD'
+      ? `vs ${esc(g.opponent)}` : 'Opponent to be determined';
+    const meta = [g.event, g.location].filter(Boolean).map(esc);
+    return `<div class="sch${post ? ' post' : ''}">
+      <div class="d">${day}<span>${dow}</span></div>
+      <div class="o">${foe}</div>
+      <div><span class="badge${post ? ' post' : ''}">${esc(label)}</span></div>
+      ${meta.length ? `<div class="meta">${meta.join(' <em>·</em> ')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderOpponents(played) {
+  const by = {};
+  for (const g of played) {
+    const o = by[g.opponent] || (by[g.opponent] = {name: g.opponent, w: 0, l: 0, t: 0, rf: 0, ra: 0});
+    o.rf += g.teamScore; o.ra += g.opponentScore;
+    if (g.teamScore > g.opponentScore) o.w++;
+    else if (g.teamScore < g.opponentScore) o.l++;
+    else o.t++;
+  }
+  const rows = Object.values(by).map(o => ({
+    ...o, n: o.w + o.l + o.t, diff: o.rf - o.ra,
+    pct: (o.w + o.t * 0.5) / Math.max(1, o.w + o.l + o.t),
+  })).sort((a, b) => b.pct - a.pct || b.n - a.n);
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.diff)), 1);
+
+  const head = `<thead><tr><th>Opponent</th><th>G</th><th>W</th><th>L</th><th>PCT</th>
+    <th>RF</th><th>RA</th><th>Diff</th><th style="text-align:center">Run differential</th></tr></thead>`;
+  const body = rows.map(r => {
+    const pctW = Math.abs(r.diff) / maxAbs * 50;
+    const bar = r.diff === 0
+      ? ''
+      : `<i class="${r.diff > 0 ? 'pos' : 'neg'}" style="width:${pctW}%"></i>`;
+    return `<tr data-opp="${esc(r.name)}">
+      <td>${esc(r.name)}</td><td>${r.n}</td><td>${r.w}</td><td>${r.l}</td>
+      <td>${fmt3(r.pct)}</td><td>${r.rf}</td><td>${r.ra}</td>
+      <td>${r.diff > 0 ? '+' : ''}${r.diff}</td>
+      <td><div class="dbar">${bar}<i class="mid"></i></div></td>
+    </tr>`;
+  }).join('');
+  const t = document.getElementById('opp');
+  t.innerHTML = head + '<tbody>' + body + '</tbody>';
+  t.querySelectorAll('tbody tr').forEach(tr => {
+    const r = rows.find(x => x.name === tr.dataset.opp);
+    tr.style.cursor = 'default';
+    tr.addEventListener('mousemove', ev => showTT(
+      `<b>${esc(r.name)}</b>${r.w}-${r.l}${r.t ? '-' + r.t : ''} in ${r.n} game${r.n === 1 ? '' : 's'}` +
+      `<br>${r.rf} runs scored · ${r.ra} allowed (${r.diff > 0 ? '+' : ''}${r.diff})`,
+      ev.clientX, ev.clientY));
+    tr.addEventListener('mouseleave', hideTT);
+  });
 }
 
 function svgEl(w, h) {
