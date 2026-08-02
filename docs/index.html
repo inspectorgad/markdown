@@ -232,7 +232,9 @@ function render() {
   const next = games.find(g => g.teamScore == null && g.date >= new Date().toISOString().slice(0,10));
   document.getElementById('h-stamp').innerHTML =
     (DATA.generatedAt ? `Data updated ${esc(DATA.generatedAt.slice(0,16).replace('T',' '))} UTC<br>` : '') +
-    (next ? `Next: ${esc(next.date)} vs ${esc(next.opponent)}` : '');
+    (next ? `Next: ${esc(next.date)} vs ${esc(next.opponent)}` +
+      (next.event ? ` · ${esc(next.event)}` : '') +
+      (next.location ? ` · ${esc(next.location)}` : '') : '');
 
   // Team tiles
   const allLines = games.flatMap(g => g.lines || []);
