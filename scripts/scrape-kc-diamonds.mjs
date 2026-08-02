@@ -25,6 +25,108 @@ async function textOf(page) {
   return page.evaluate(() => (document.body ? document.body.innerText : ''));
 }
 
+// --- 0. Schedule, standings, and brand assets -------------------------------
+// The upcoming-schedule page is the source of truth for future games,
+// postseason rounds, fall exhibitions and promo nights, so the app can pick up
+// anything newly added without a code change.
+async function collectSchedule() {
+  const page = await context.newPage();
+  const out = [];
+  try {
+    await page.goto('https://thekcdiamonds.com/schedule/schedule', {
+      waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForTimeout(8_000);
+    for (let i = 0; i < 20; i++) {
+      await page.evaluate(() => window.scrollBy(0, 1000));
+      await page.waitForTimeout(600);
+    }
+    fs.writeFileSync('scraped/schedule.txt', await textOf(page));
+    await page.screenshot({ path: 'scraped/schedule.png', fullPage: true });
+  } catch (e) {
+    fs.writeFileSync('scraped/schedule.txt', `ERROR: ${e.message}`);
+  } finally {
+    await page.close();
+  }
+  return out;
+}
+
+async function collectStandings() {
+  const urls = [
+    'https://www.professionalsoftballleague.com/standings',
+    'https://www.professionalsoftballleague.com/league-standings',
+    'https://www.professionalsoftballleague.com/stats',
+    'https://www.professionalsoftballleague.com/statistics',
+    'https://www.professionalsoftballleague.com/',
+    'https://thekcdiamonds.com/standings',
+  ];
+  const found = [];
+  for (const url of urls) {
+    const page = await context.newPage();
+    try {
+      const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await page.waitForTimeout(7_000);
+      for (let i = 0; i < 8; i++) {
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await page.waitForTimeout(600);
+      }
+      const text = await textOf(page);
+      const status = resp ? resp.status() : 0;
+      const slug = url.replace(/https?:\/\//, '').replace(/[^a-z0-9]+/gi, '-').slice(0, 60);
+      fs.writeFileSync(`scraped/standings-${slug}.txt`, `URL: ${url}\nHTTP: ${status}\n\n${text}`);
+      if (status === 200 && /\bW\b[\s\S]{0,40}\bL\b|standings/i.test(text)) {
+        await page.screenshot({ path: `scraped/standings-${slug}.png`, fullPage: true });
+        found.push(url);
+      }
+      console.log(`standings ${url}: HTTP ${status}, ${text.length} chars`);
+    } catch (e) {
+      console.log(`standings ${url}: ERROR ${e.message}`);
+    } finally {
+      await page.close();
+    }
+  }
+  return found;
+}
+
+// Grab the team's own logo art so the app icon can be built from it.
+async function collectLogo() {
+  const page = await context.newPage();
+  try {
+    await page.goto('https://thekcdiamonds.com/', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForTimeout(7_000);
+    const srcs = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('img'))
+        .map((i) => ({ src: i.currentSrc || i.src, alt: i.alt || '', w: i.naturalWidth, h: i.naturalHeight }))
+        .filter((i) => i.src && i.w >= 100));
+    fs.writeFileSync('scraped/logo-candidates.json', JSON.stringify(srcs, null, 2));
+    // Prefer square-ish art whose filename/alt mentions the team or a logo.
+    const scored = srcs
+      .map((i) => ({ ...i, ratio: i.w / Math.max(1, i.h) }))
+      .filter((i) => i.ratio > 0.6 && i.ratio < 1.7)
+      .sort((a, b) => (/(logo|diamond|mark|icon)/i.test(b.src + b.alt) ? 1 : 0) -
+                      (/(logo|diamond|mark|icon)/i.test(a.src + a.alt) ? 1 : 0) ||
+                      b.w - a.w);
+    let i = 0;
+    for (const cand of scored.slice(0, 4)) {
+      try {
+        const resp = await page.request.get(cand.src);
+        if (resp.ok()) {
+          fs.writeFileSync(`scraped/logo-${i}.png`, await resp.body());
+          console.log(`logo-${i}: ${cand.w}x${cand.h} ${cand.src.slice(0, 90)}`);
+          i++;
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.log('logo: ERROR ' + e.message);
+  } finally {
+    await page.close();
+  }
+}
+
+await collectSchedule();
+await collectStandings();
+await collectLogo();
+
 // --- 1. Past-results page: map (date, opponent) -> box score URL; long waits.
 const gamesPage = await context.newPage();
 await gamesPage.goto('https://thekcdiamonds.com/schedule/past-games-results', {
