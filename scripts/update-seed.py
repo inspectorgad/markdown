@@ -266,6 +266,119 @@ for f in sorted(glob.glob('scraped/box-*.json')):
                 game['lines'] = out
                 changed = True
 
+
+# --- Sync the schedule -------------------------------------------------------
+# The team's schedule page is the source of truth for which games exist -
+# postseason rounds, fall exhibitions, reschedules and promo nights all show up
+# there first. Parsing it every run means new games and special events reach
+# the app without a code change. Only additive: scores and stat lines are never
+# touched, and a game is never removed (a scraped page that briefly drops a
+# game must not erase recorded history).
+SCHEDULE_FILES = ('scraped/schedule.txt', 'scraped/past-results.txt')
+NOISE = ('TICKETS', 'LIVE FEED', 'FCSN', 'PLUTOTV', 'BOX SCORE', 'VS.')
+# Tokens the site writes in caps that must stay caps when a name is title-cased.
+KEEP_CAPS = {'KU', 'KC', 'TBD', 'NY', 'PSL', 'MU'}
+
+
+def smart_title(raw):
+    """Title-case a scraped team name without mangling initialisms."""
+    return ' '.join(
+        w if w.upper() in KEEP_CAPS else w.title() for w in raw.split())
+
+
+def season_for(date_str, opponent):
+    """Postseason = the Aug championship week; Oct dates are fall exhibitions."""
+    if date_str >= '2026-10-01':
+        return '2026 Fall'
+    if date_str >= '2026-08-03':
+        return '2026 Postseason'
+    return '2026'
+
+
+def parse_schedule():
+    """-> {date: {'opponent':…, 'event':…, 'location':…}} from the site's pages."""
+    out = {}
+    for path in SCHEDULE_FILES:
+        try:
+            text = open(path).read()
+        except FileNotFoundError:
+            continue
+        lines = [l.strip() for l in text.split('\n')]
+        for i, line in enumerate(lines):
+            md = re.match(
+                r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(\d{4})',
+                line)
+            if not md:
+                continue
+            date = f'{md.group(3)}-{MONTHS[md.group(1)]:02d}-{int(md.group(2)):02d}'
+            # Each block reads: <day> / <date time> / VS. / opponent /
+            # location / optional promo-event line, then ticket links.
+            try:
+                vs = next(k for k in range(i + 1, min(i + 6, len(lines)))
+                          if lines[k].upper() == 'VS.')
+            except StopIteration:
+                continue
+            fields = []
+            for k in range(vs + 1, min(vs + 9, len(lines))):
+                cur = lines[k]
+                if not cur:
+                    continue
+                if cur.upper() in NOISE or re.match(
+                        r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$', cur):
+                    break
+                if re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d',
+                            cur):
+                    break
+                fields.append(cur)
+                if len(fields) == 3:
+                    break
+            raw_opp = fields[0] if fields else ''
+            opponent = (CANONICAL_OPP.get(raw_opp.upper(), smart_title(raw_opp))
+                        if raw_opp.strip() else 'TBD')
+            location = fields[1] if len(fields) > 1 else None
+            if location and location.upper() == 'TBD':
+                location = None          # venue not announced yet
+            event = fields[2] if len(fields) > 2 else None
+            prev = out.get(date, {})
+            out[date] = {
+                'opponent': opponent,
+                'location': location or prev.get('location'),
+                'event': event or prev.get('event'),
+            }
+    return out
+
+
+scheduled = parse_schedule()
+if scheduled:
+    for date, info in sorted(scheduled.items()):
+        game = games_by_date.get(date)
+        if game is None:
+            game = {'date': date, 'opponent': info['opponent'],
+                    'season': season_for(date, info['opponent'])}
+            if info.get('event'):
+                game['event'] = info['event']
+            if info.get('location'):
+                game['location'] = info['location']
+            seed['games'].append(game)
+            games_by_date[date] = game
+            changed = True
+            print(f"schedule: added {date} vs {game['opponent']} ({game['season']})")
+        else:
+            # Fill in details the site publishes later without touching results.
+            for key, val in (('event', info.get('event')),
+                             ('location', info.get('location'))):
+                if val and game.get(key) != val:
+                    game[key] = val
+                    changed = True
+            want_season = season_for(date, game['opponent'])
+            if game.get('season') != want_season and 'lines' not in game:
+                game['season'] = want_season
+                changed = True
+            if game.get('opponent') in (None, 'TBD') and info['opponent'] != 'TBD':
+                game['opponent'] = info['opponent']
+                changed = True
+    seed['games'].sort(key=lambda g: g['date'])
+
 if changed:
     seed['formatVersion'] = 1
     seed['generatedAt'] = datetime.datetime.now(datetime.timezone.utc).strftime(

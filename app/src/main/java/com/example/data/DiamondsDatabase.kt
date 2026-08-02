@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [Player::class, Game::class, StatLine::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class DiamondsDatabase : RoomDatabase() {
@@ -23,7 +23,9 @@ abstract class DiamondsDatabase : RoomDatabase() {
                     context.applicationContext,
                     DiamondsDatabase::class.java,
                     "kc_diamonds.db"
-                ).build().also { instance = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

@@ -77,16 +77,28 @@ object Seeder {
                         opponent = g.getString("opponent"),
                         season = g.getString("season"),
                         teamScore = seedTeamScore,
-                        opponentScore = seedOppScore
+                        opponentScore = seedOppScore,
+                        event = g.optString("event", ""),
+                        location = g.optString("location", "")
                     )
                 )
             } else {
                 gameId = existing.id
-                if (existing.teamScore == null && existing.opponentScore == null &&
+                val seedEvent = g.optString("event", "")
+                val seedLocation = g.optString("location", "")
+                val scoreArrived = existing.teamScore == null && existing.opponentScore == null &&
                     (seedTeamScore != null || seedOppScore != null)
-                ) {
+                val detailsChanged = (seedEvent.isNotEmpty() && seedEvent != existing.event) ||
+                    (seedLocation.isNotEmpty() && seedLocation != existing.location)
+                if (scoreArrived || detailsChanged) {
                     dao.updateGame(
-                        existing.copy(teamScore = seedTeamScore, opponentScore = seedOppScore)
+                        existing.copy(
+                            teamScore = if (scoreArrived) seedTeamScore else existing.teamScore,
+                            opponentScore =
+                                if (scoreArrived) seedOppScore else existing.opponentScore,
+                            event = seedEvent.ifEmpty { existing.event },
+                            location = seedLocation.ifEmpty { existing.location }
+                        )
                     )
                 }
             }

@@ -22,7 +22,9 @@ data class Game(
     val opponent: String,
     val season: String,
     val teamScore: Int? = null,
-    val opponentScore: Int? = null
+    val opponentScore: Int? = null,
+    val event: String = "",
+    val location: String = ""
 )
 
 @Entity(
