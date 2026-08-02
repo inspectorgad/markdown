@@ -36,33 +36,49 @@ jobs:
       - name: Scrape pages
         run: node scripts/scrape-kc-diamonds.mjs
 
-      - name: Fold new box scores into seed data
-        run: python3 scripts/update-seed.py
-
-      # Cross-check against the official aggregates BEFORE anything is
-      # committed: over-counts (a box score applied twice) fail the run.
-      - name: Verify seed against official stats
-        run: python3 scripts/verify-seed.py
-
-      - name: Commit scraped data and seed update
+      - name: Fold into seed, verify, and commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f scraped/
-          git diff --cached --quiet || git commit -m "Update scraped KC Diamonds data [skip ci]"
+          # scraped/ is this run's raw capture and is always authoritative, so
+          # keep it outside the work tree while we move the branch around.
+          mkdir -p /tmp/capture && cp -a scraped/. /tmp/capture/
+
+          # A scrape takes ~15 minutes, so main will often have moved on while
+          # it ran. Rather than rebasing a commit built against a stale tree
+          # (which conflicts on regenerated files), rewind to whatever landed,
+          # drop the fresh capture on top, and re-derive the seed with main's
+          # current parser.
+          rebuild() {
+            git fetch origin main
+            git reset --hard origin/main
+            rm -rf scraped && mkdir -p scraped && cp -a /tmp/capture/. scraped/
+            python3 scripts/update-seed.py
+            # Cross-check against the official aggregates BEFORE anything is
+            # committed: over-counts (a box score applied twice) fail the run.
+            python3 scripts/verify-seed.py
+          }
+
+          rebuild
           SEED_CHANGED=0
-          git add app/src/main/assets/seed.json
-          git diff --cached --quiet || { git commit -m "Update season data from nightly scrape"; SEED_CHANGED=1; }
-          # A scrape takes ~15 minutes, so main may have moved on while it ran.
-          # Rebase onto whatever landed and retry rather than losing the run.
+          PUSHED=0
           for attempt in 1 2 3; do
-            if git push; then break; fi
-            echo "push rejected (attempt $attempt); rebasing onto origin/main"
-            git pull --rebase origin main
-            sleep 3
+            git add -f scraped/
+            git diff --cached --quiet || git commit -m "Update scraped KC Diamonds data [skip ci]"
+            SEED_CHANGED=0
+            git add app/src/main/assets/seed.json
+            git diff --cached --quiet || { git commit -m "Update season data from nightly scrape"; SEED_CHANGED=1; }
+            if git push; then PUSHED=1; break; fi
+            echo "push rejected (attempt $attempt); re-deriving on top of latest main"
+            sleep $((attempt * 5))
+            rebuild
           done
+          if [ "$PUSHED" != "1" ]; then
+            echo "::error::could not push the scrape after 3 attempts"
+            exit 1
+          fi
           # Pushes made with GITHUB_TOKEN do not trigger other workflows, so
           # the in-app sync feed must be refreshed from here directly.
           if [ "$SEED_CHANGED" = "1" ]; then
