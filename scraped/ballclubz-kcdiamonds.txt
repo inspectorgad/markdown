@@ -6,9 +6,6 @@ Roster
 Team Info
 SCHEDULE
 SHOW / HIDE PAST GAMES
-Sun 7/26
-VS. Atlanta Smoke
-L 3-11
 Wed 7/29
 @ St Louis Gatekeepers
 W 9-1
@@ -19,9 +16,8 @@ Fri 7/31
 @ St Louis Gatekeepers
 W 10-0
 Sat 8/1
-7:35pm
 @ St Louis Gatekeepers
-PREVIEW
+W 6-0
 View Team Statistics
 Players
 #	POS	LAST NAME	FIRST NAME	BATS	THROWS

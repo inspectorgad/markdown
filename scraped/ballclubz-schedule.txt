@@ -113,6 +113,9 @@ L 1-4
 Sat 7/25
 VS. Atlanta Smoke
 L 6-12
+Sun 7/26
+VS. Atlanta Smoke
+L 3-11
 Mon 6/8
 4:00pm
 @ Puerto Rico
@@ -234,9 +237,8 @@ Fri 7/31
 @ St Louis Gatekeepers
 W 10-0
 Sat 8/1
-7:35pm
 @ St Louis Gatekeepers
-PREVIEW
+W 6-0
 View Team Statistics
 Players
 #	POS	LAST NAME	FIRST NAME	BATS	THROWS
