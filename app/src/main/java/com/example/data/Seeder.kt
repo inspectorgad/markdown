@@ -30,7 +30,11 @@ object Seeder {
             context.assets.open("seed.json").bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
 
-        runCatching { merge(JSONObject(json), dao) }
+        runCatching {
+            val root = JSONObject(json)
+            StandingsStore.save(context, root)
+            merge(root, dao)
+        }
     }
 
     /** Also used by [SeasonSync] for network-fetched season data. */

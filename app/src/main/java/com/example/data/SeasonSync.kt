@@ -71,6 +71,7 @@ object SeasonSync {
             }
 
             try {
+                StandingsStore.save(context, root)
                 Seeder.merge(root, dao)
             } catch (e: Exception) {
                 return@withContext SyncResult.Failed("merge failed: ${e.message}")

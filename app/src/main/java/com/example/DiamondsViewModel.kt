@@ -7,6 +7,8 @@ import com.example.data.DiamondsDatabase
 import com.example.data.Game
 import com.example.data.Player
 import com.example.data.SeasonSync
+import com.example.data.StandingsRow
+import com.example.data.StandingsStore
 import com.example.data.Seeder
 import com.example.data.StatLine
 import com.example.data.SyncResult
@@ -30,6 +32,9 @@ class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
     private val _dataUpdatedAt = MutableStateFlow(SeasonSync.lastGeneratedAt(app))
     val dataUpdatedAt: StateFlow<String?> = _dataUpdatedAt.asStateFlow()
 
+    private val _standings = MutableStateFlow(StandingsStore.load(app))
+    val standings: StateFlow<List<StandingsRow>> = _standings.asStateFlow()
+
     // Snackbar messages, emitted only for user-initiated refreshes.
     private val _syncMessages = MutableSharedFlow<String>()
     val syncMessages: SharedFlow<String> = _syncMessages.asSharedFlow()
@@ -39,6 +44,7 @@ class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
             // Bundled data first (also covers first launch offline), then a
             // throttled network sync for anything newer.
             Seeder.sync(app, dao)
+            _standings.value = StandingsStore.load(app)
             if (SeasonSync.shouldAutoSync(app)) refreshInternal(manual = false)
         }
     }
@@ -54,6 +60,7 @@ class DiamondsViewModel(app: Application) : AndroidViewModel(app) {
             _isSyncing.value = false
         }
         _dataUpdatedAt.value = SeasonSync.lastGeneratedAt(getApplication())
+        _standings.value = StandingsStore.load(getApplication())
         if (manual) {
             _syncMessages.emit(
                 when (result) {

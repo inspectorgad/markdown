@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -28,7 +29,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.DiamondsViewModel
 
-enum class Tab(val label: String) { Roster("Roster"), Games("Games"), Leaders("Leaders") }
+enum class Tab(val label: String) {
+    Roster("Roster"), Games("Games"), Leaders("Leaders"), Standings("Standings")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +44,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     val players by viewModel.players.collectAsStateWithLifecycle()
     val games by viewModel.games.collectAsStateWithLifecycle()
     val statLines by viewModel.statLines.collectAsStateWithLifecycle()
+    val standings by viewModel.standings.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val dataUpdatedAt by viewModel.dataUpdatedAt.collectAsStateWithLifecycle()
 
@@ -99,6 +103,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                                         Tab.Roster -> Icons.Default.Groups
                                         Tab.Games -> Icons.AutoMirrored.Filled.List
                                         Tab.Leaders -> Icons.Default.EmojiEvents
+                                        Tab.Standings -> Icons.Default.Leaderboard
                                     },
                                     contentDescription = tab.label
                                 )
@@ -135,6 +140,11 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                         players = players,
                         games = games,
                         statLines = statLines,
+                        dataUpdatedAt = dataUpdatedAt
+                    )
+
+                    Tab.Standings -> StandingsScreen(
+                        standings = standings,
                         dataUpdatedAt = dataUpdatedAt
                     )
                 }
