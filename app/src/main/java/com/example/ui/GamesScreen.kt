@@ -43,6 +43,12 @@ import com.example.data.Game
 import com.example.data.Player
 import com.example.data.StatLine
 import com.example.stats.summarize
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private fun today(): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
 @Composable
 fun GamesScreen(
@@ -88,6 +94,7 @@ fun GamesScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                GameDetails(game)
                             }
                             ScoreText(game)
                         }
@@ -119,13 +126,39 @@ fun GamesScreen(
     }
 }
 
+/**
+ * Shows the promo/event name and venue the scraper picked up off the published
+ * schedule. Both are optional — older games predate the schedule sync.
+ */
+@Composable
+private fun GameDetails(game: Game) {
+    if (game.event.isNotBlank()) {
+        Text(
+            game.event,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+    if (game.location.isNotBlank()) {
+        Text(
+            game.location,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun ScoreText(game: Game) {
     val us = game.teamScore
     val them = game.opponentScore
     if (us == null || them == null) {
+        // ISO dates compare lexicographically, so a plain string compare tells us
+        // whether this game has been played yet.
+        val upcoming = game.date > today()
         Text(
-            "No score",
+            if (upcoming) "Upcoming" else "No score",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -217,7 +250,11 @@ fun GameDialog(
                             opponent = opponent.trim(),
                             season = season.trim(),
                             teamScore = teamScore.toIntOrNull(),
-                            opponentScore = oppScore.toIntOrNull()
+                            opponentScore = oppScore.toIntOrNull(),
+                            // Scraped schedule details aren't editable here; carry
+                            // them through so an edit doesn't blank them out.
+                            event = game?.event ?: "",
+                            location = game?.location ?: ""
                         )
                     )
                 }
@@ -284,6 +321,7 @@ fun GameDetailScreen(
                                 "${game.date} · ${game.season}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                            GameDetails(game)
                             Text(
                                 "Tap a player below to enter their batting line.",
                                 style = MaterialTheme.typography.bodySmall,
