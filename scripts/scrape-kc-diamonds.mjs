@@ -199,6 +199,7 @@ console.log(`Game ids to fetch (${ids.length}):`, ids.join(', '));
 
 // --- 3. Every game: line score (WRAP), opponent box, and KC Diamonds box.
 let i = 0;
+let boxOk = 0;
 for (const id of ids) {
   const url = `https://www.ballclubz.com/kcdiamonds/live/${id}`;
   const name = `box-${String(i++).padStart(2, '0')}-${id}`;
@@ -209,36 +210,43 @@ for (const id of ids) {
     const wrap = await textOf(page);
     let boxAway = '';
     let boxKC = '';
-    // The BOX tab sometimes takes longer than one click's patience to appear -
-    // freshly-finished games are the worst offenders, and losing the tab costs
-    // every batting line for that game. Retry with a reload before giving up.
+    // A game that was never scored has no batting table to reach, so don't
+    // spend clicks hunting for a tab that cannot be there.
+    const neverScored = /not available/.test(wrap);
     let lastErr = '';
-    for (let attempt = 1; attempt <= 3 && !boxKC.includes('Batters\t'); attempt++) {
-      try {
-        if (attempt > 1) {
-          await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
-          await page.waitForTimeout(6_000);
+    if (!neverScored) {
+      // BallClubz renamed this tab from "BOX" to "STATS" in early Aug 2026,
+      // which silently emptied every box capture until it was noticed. Try the
+      // known labels in turn and keep whichever yields a batting table, so a
+      // future rename degrades to one bad night rather than an unbounded one.
+      for (const label of ['STATS', 'BOX']) {
+        try {
+          const tab = page.getByText(label, { exact: true }).first();
+          if (!(await tab.count())) continue;
+          await tab.click({ timeout: 20_000 });
+          await page.waitForTimeout(5_000);
+          const away = await textOf(page);
+          // The box view has a team toggle; click the KC Diamonds side.
+          await page.evaluate(() => {
+            const els = Array.from(document.querySelectorAll('*')).filter(
+              (e) => e.children.length === 0 && e.textContent.trim() === 'KC Diamonds'
+            );
+            if (els.length) els[els.length - 1].click();
+          });
+          await page.waitForTimeout(5_000);
+          const kc = await textOf(page);
+          if (kc.includes('Batters\t')) { boxAway = away; boxKC = kc; break; }
+          boxAway = boxAway || away;
+        } catch (e) {
+          lastErr = e.message.split('\n')[0];
         }
-        await page.getByText('BOX', { exact: true }).first()
-          .click({ timeout: 45_000 });
-        await page.waitForTimeout(5_000);
-        boxAway = await textOf(page);
-        // The BOX view has a team toggle; click the KC Diamonds side.
-        await page.evaluate(() => {
-          const els = Array.from(document.querySelectorAll('*')).filter(
-            (e) => e.children.length === 0 && e.textContent.trim() === 'KC Diamonds'
-          );
-          if (els.length) els[els.length - 1].click();
-        });
-        await page.waitForTimeout(5_000);
-        boxKC = await textOf(page);
-      } catch (e) {
-        lastErr = e.message;
-        console.log(`${name}: BOX attempt ${attempt} failed - ${e.message.split('\n')[0]}`);
       }
-    }
-    if (!boxKC.includes('Batters\t') && lastErr) {
-      boxAway = boxAway || `BOX TAB ERROR: ${lastErr}`;
+      if (!boxKC.includes('Batters\t')) {
+        console.log(`${name}: no batting table${lastErr ? ' - ' + lastErr : ''}`);
+        if (lastErr) boxAway = boxAway || `BOX TAB ERROR: ${lastErr}`;
+      } else {
+        boxOk++;
+      }
     }
     fs.writeFileSync(
       `scraped/${name}.json`,
@@ -271,3 +279,14 @@ try {
 
 await browser.close();
 console.log('Done. Files:', fs.readdirSync('scraped').join(', '));
+
+// A tab rename upstream emptied every batting table for days without anything
+// failing, because a missing box score only ever looked like a warning. If no
+// game yields a batting table, the selector is broken, not the season - say so
+// loudly and fail the run so the alert fires the same night.
+console.log(`Batting tables captured: ${boxOk}/${ids.length}`);
+if (ids.length > 3 && boxOk === 0) {
+  console.log('::error::no batting table captured for ANY game - the box-score ' +
+    'tab selector is probably broken upstream (it was renamed BOX -> STATS once)');
+  process.exit(1);
+}

@@ -1,1 +1,1 @@
-2026-08-06T13:12:00Z recover Aug 5 championship box lines
+2026-08-06T15:06:37Z box tab renamed BOX->STATS
