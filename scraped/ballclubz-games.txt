@@ -6,9 +6,6 @@ Roster
 Team Info
 SCHEDULE
 SHOW / HIDE PAST GAMES
-Wed 7/29
-@ St Louis Gatekeepers
-W 9-1
 Thu 7/30
 @ St Louis Gatekeepers
 L 5-6
@@ -18,6 +15,9 @@ W 10-0
 Sat 8/1
 @ St Louis Gatekeepers
 W 6-0
+Wed 8/5
+VS. Florida Vibe
+L 5-6
 View Team Statistics
 Players
 #	POS	LAST NAME	FIRST NAME	BATS	THROWS
