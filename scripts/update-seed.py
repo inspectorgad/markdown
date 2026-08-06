@@ -65,9 +65,23 @@ known_names = {p['name'] for p in seed['players']}
 changed = False
 
 
+# BallClubz put per-player box scores behind registration in Aug 2026: the
+# Batters table still renders, but every column except PA is an em-dash and the
+# page ends with "Register/Login to view additional information". Those dashes
+# used to parse as zeros, which let the re-derive step replace a season of real
+# batting lines with all-zero rows. A gated table has no data in it, so it must
+# be rejected outright rather than read as zeros.
+GATED_BOX = re.compile(r'Register/Login|\t-\t-\t-')
+
+
 def parse_box_kc(text):
-    """Parse the KC Diamonds batting table -> ordered {player_name: Counter}."""
+    """Parse the KC Diamonds batting table -> ordered {player_name: Counter}.
+
+    Returns None when the table carries no usable numbers.
+    """
     global changed
+    if GATED_BOX.search(text):
+        return None
     lines = text.split('\n')
     try:
         start = next(i for i, l in enumerate(lines) if l.startswith('Batters\t'))
@@ -225,6 +239,15 @@ for g in seed['games']:
                         '2b': c['2b'], '3b': c['3b'], 'hr': c['hr'], 'rbi': c['rbi'],
                         'bb': c['bb'], 'so': c['so'], 'hbp': c['hbp'], 'sf': c['sf'],
                         'sb': c['sb']})
+    # Belt and braces: a re-derive may only ever correct a game, never gut it.
+    # Whatever the upstream page does next, a snapshot that would erase recorded
+    # production is a parsing failure by definition, not a scoring correction.
+    old_ab = sum(l['ab'] for l in g['lines'])
+    new_ab = sum(l['ab'] for l in rebuilt)
+    if old_ab and new_ab * 2 < old_ab:
+        print(f'!! {g["date"]}: refusing re-derive, at-bats would drop '
+              f'{old_ab} -> {new_ab} (snapshot looks unparsed)', file=sys.stderr)
+        continue
     if rebuilt and rebuilt != g['lines']:
         before = {l['player'] for l in g['lines']}
         after = {l['player'] for l in rebuilt}

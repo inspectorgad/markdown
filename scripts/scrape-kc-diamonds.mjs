@@ -200,6 +200,7 @@ console.log(`Game ids to fetch (${ids.length}):`, ids.join(', '));
 // --- 3. Every game: line score (WRAP), opponent box, and KC Diamonds box.
 let i = 0;
 let boxOk = 0;
+let gated = 0;
 for (const id of ids) {
   const url = `https://www.ballclubz.com/kcdiamonds/live/${id}`;
   const name = `box-${String(i++).padStart(2, '0')}-${id}`;
@@ -235,7 +236,13 @@ for (const id of ids) {
           });
           await page.waitForTimeout(5_000);
           const kc = await textOf(page);
-          if (kc.includes('Batters\t')) { boxAway = away; boxKC = kc; break; }
+          if (kc.includes('Batters\t')) {
+            boxAway = away;
+            boxKC = kc;
+            // The table renders but the numbers are dashes behind a login.
+            if (/Register\/Login|\t-\t-\t-/.test(kc)) gated++;
+            break;
+          }
           boxAway = boxAway || away;
         } catch (e) {
           lastErr = e.message.split('\n')[0];
@@ -284,9 +291,16 @@ console.log('Done. Files:', fs.readdirSync('scraped').join(', '));
 // failing, because a missing box score only ever looked like a warning. If no
 // game yields a batting table, the selector is broken, not the season - say so
 // loudly and fail the run so the alert fires the same night.
-console.log(`Batting tables captured: ${boxOk}/${ids.length}`);
+console.log(`Batting tables captured: ${boxOk}/${ids.length} (login-gated: ${gated})`);
 if (ids.length > 3 && boxOk === 0) {
-  console.log('::error::no batting table captured for ANY game - the box-score ' +
-    'tab selector is probably broken upstream (it was renamed BOX -> STATS once)');
+  // Reaching the table at all is what we control; whether it holds numbers is
+  // BallClubz's call. Failing only on "no table" keeps this a real signal
+  // instead of nightly noise now that the numbers are gated.
+  console.log('::error::could not reach the box-score tab for ANY game - the ' +
+    'selector is probably broken upstream (it was renamed BOX -> STATS once)');
   process.exit(1);
+}
+if (gated && gated === boxOk) {
+  console.log('::warning::every box score is login-gated - per-player batting ' +
+    'lines are no longer public, so new games will carry scores only');
 }
