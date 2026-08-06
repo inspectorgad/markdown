@@ -81,8 +81,20 @@ jobs:
           fi
           # Pushes made with GITHUB_TOKEN do not trigger other workflows, so
           # the in-app sync feed must be refreshed from here directly.
-          if [ "$SEED_CHANGED" = "1" ]; then
-            cp app/src/main/assets/seed.json season-data.json
+          # Reconcile on content, not on "did this run change something". A seed
+          # corrected out-of-band (a bad parse rolled back by hand) left the
+          # feed serving the bad copy, because that run reported no change and
+          # skipped the upload. Compare digests instead so the feed converges.
+          cp app/src/main/assets/seed.json season-data.json
+          LOCAL=$(sha256sum season-data.json | cut -d' ' -f1)
+          REMOTE=$(gh release view latest-apk --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq \
+            '.assets[] | select(.name=="season-data.json") | .digest' 2>/dev/null \
+            | sed 's/^sha256://')
+          if [ "$LOCAL" != "$REMOTE" ]; then
+            echo "refreshing feed: local $LOCAL != release ${REMOTE:-none}"
             gh release upload latest-apk season-data.json \
               --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "feed already matches the seed ($LOCAL)"
           fi
