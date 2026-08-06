@@ -6402,7 +6402,10 @@
       "opponent": "Florida Vibe",
       "season": "2026 Postseason",
       "location": "6450 Husky Pkwy, Trussville, AL 35173",
-      "event": "PSL Championship"
+      "event": "PSL Championship",
+      "teamScore": 5,
+      "opponentScore": 6,
+      "srcId": "2bca852"
     },
     {
       "date": "2026-08-06",
@@ -6439,5 +6442,5 @@
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-08-06T11:56:05Z"
+  "generatedAt": "2026-08-06T13:10:56Z"
 }

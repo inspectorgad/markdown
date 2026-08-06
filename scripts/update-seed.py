@@ -153,6 +153,28 @@ def opponent_matches(opp, wrap):
     return any(h.lower() in wrap.lower() for h in OPP_HINTS.get(opp, (opp[:6],)))
 
 
+def is_tbd(opp):
+    """A placeholder opponent, i.e. a bracket the league hasn't drawn yet."""
+    return not opp or opp.strip().upper() == 'TBD'
+
+
+def opponent_from_wrap(wrap):
+    """The non-KC team named in the box score's line-score rows, or None.
+
+    The line score is the only place the opponent is stated in a stable,
+    machine-readable position:
+        Florida Vibe   2 0 2 0 1 1 0   6 14 1 12
+        KC Diamonds    0 0 0 2 1 2 0   5  6 0  5
+    """
+    for line in wrap.split('\n'):
+        m = re.match(r"^([A-Za-z][A-Za-z .&'-]+?)\t[\d\t]+$", line)
+        if m:
+            name = m.group(1).strip()
+            if name != 'KC Diamonds':
+                return CANONICAL_OPP.get(name.upper(), name)
+    return None
+
+
 # Game id -> date, from the embedded map, the seed's own record of which id
 # produced each game's data (srcId), and the site's past-results page.
 id_to_date = dict(EMBEDDED_MAP)
@@ -213,58 +235,72 @@ for g in seed['games']:
         g['lines'] = rebuilt
         changed = True
 
-for f in sorted(glob.glob('scraped/box-*.json')):
-    d = json.load(open(f))
-    gid = d.get('id') or d['url'].rsplit('/', 1)[1]
-    wrap = d.get('wrap', '')
-    res = parse_result(wrap)
-    if not res:
-        continue
-    date = id_to_date.get(gid)
-    if not date:
-        # Chronological fallback: earliest past seed game still without a
-        # score whose opponent matches the line score.
-        for g in sorted(seed['games'], key=lambda x: x['date']):
-            if g['date'] <= today and 'teamScore' not in g \
-                    and g['date'] not in id_to_date.values() \
-                    and opponent_matches(g['opponent'], wrap):
-                date = g['date']
-                id_to_date[gid] = date
-                print(f'inferred: {gid} -> {date} vs {g["opponent"]}')
-                break
-    if not date:
-        print(f'unmapped game id {gid} (result {res}), skipping', file=sys.stderr)
-        continue
-    game = games_by_date.get(date)
-    if game is None:
-        continue  # not a scheduled KC game we know about
-    if not opponent_matches(game['opponent'], wrap):
-        print(f'!! {date}: opponent {game["opponent"]} not in line score, skipping',
-              file=sys.stderr)
-        continue
-    if game.get('srcId') not in (None, gid):
-        continue  # this date's data came from a different game id
-    if 'teamScore' not in game:
-        game['teamScore'], game['opponentScore'] = res
-        game['srcId'] = gid
-        changed = True
-    elif game.get('srcId') is None:
-        game['srcId'] = gid
-        changed = True
-    if 'lines' not in game:
-        parsed = parse_box_kc(d.get('boxKC', '') or '')
-        if parsed:
-            out = []
-            for name, c in parsed.items():
-                if c['pa'] == 0 and c['ab'] == 0 and c['r'] == 0:
-                    continue
-                out.append({'player': name, 'ab': c['ab'], 'r': c['r'], 'h': c['h'],
-                            '2b': c['2b'], '3b': c['3b'], 'hr': c['hr'], 'rbi': c['rbi'],
-                            'bb': c['bb'], 'so': c['so'], 'hbp': c['hbp'], 'sf': c['sf'],
-                            'sb': c['sb']})
-            if out:
-                game['lines'] = out
+def ingest_box_scores():
+    """Fold every published BallClubz box score into the seed."""
+    changed = False
+    for f in sorted(glob.glob('scraped/box-*.json')):
+        d = json.load(open(f))
+        gid = d.get('id') or d['url'].rsplit('/', 1)[1]
+        wrap = d.get('wrap', '')
+        res = parse_result(wrap)
+        if not res:
+            continue
+        date = id_to_date.get(gid)
+        if not date:
+            # Chronological fallback: earliest past seed game still without a
+            # score whose opponent matches the line score. A game the site
+            # still lists as TBD matches any opponent - an undrawn bracket is
+            # exactly when we must trust the box score over the schedule.
+            for g in sorted(seed['games'], key=lambda x: x['date']):
+                if g['date'] <= today and 'teamScore' not in g \
+                        and g['date'] not in id_to_date.values() \
+                        and (is_tbd(g['opponent'])
+                             or opponent_matches(g['opponent'], wrap)):
+                    date = g['date']
+                    id_to_date[gid] = date
+                    print(f'inferred: {gid} -> {date} vs {g["opponent"]}')
+                    break
+        if not date:
+            print(f'unmapped game id {gid} (result {res}), skipping', file=sys.stderr)
+            continue
+        game = games_by_date.get(date)
+        if game is None:
+            continue  # not a scheduled KC game we know about
+        # Adopt the opponent the box score names while the schedule says TBD.
+        if is_tbd(game.get('opponent')):
+            named = opponent_from_wrap(wrap)
+            if named:
+                print(f'{date}: opponent TBD -> {named} (from box score)')
+                game['opponent'] = named
                 changed = True
+        if not opponent_matches(game['opponent'], wrap):
+            print(f'!! {date}: opponent {game["opponent"]} not in line score, skipping',
+                  file=sys.stderr)
+            continue
+        if game.get('srcId') not in (None, gid):
+            continue  # this date's data came from a different game id
+        if 'teamScore' not in game:
+            game['teamScore'], game['opponentScore'] = res
+            game['srcId'] = gid
+            changed = True
+        elif game.get('srcId') is None:
+            game['srcId'] = gid
+            changed = True
+        if 'lines' not in game:
+            parsed = parse_box_kc(d.get('boxKC', '') or '')
+            if parsed:
+                out = []
+                for name, c in parsed.items():
+                    if c['pa'] == 0 and c['ab'] == 0 and c['r'] == 0:
+                        continue
+                    out.append({'player': name, 'ab': c['ab'], 'r': c['r'], 'h': c['h'],
+                                '2b': c['2b'], '3b': c['3b'], 'hr': c['hr'],
+                                'rbi': c['rbi'], 'bb': c['bb'], 'so': c['so'],
+                                'hbp': c['hbp'], 'sf': c['sf'], 'sb': c['sb']})
+                if out:
+                    game['lines'] = out
+                    changed = True
+    return changed
 
 
 # --- Sync the schedule -------------------------------------------------------
@@ -359,8 +395,18 @@ def parse_schedule():
     return out
 
 
-scheduled = parse_schedule()
-if scheduled:
+def sync_schedule():
+    """Fold the published schedule into the seed. Returns True if anything moved.
+
+    Runs BEFORE box scores are ingested: a postseason game is published as
+    "TBD" until the bracket is drawn, and the box-score matcher needs the real
+    opponent to tie a game id to a date. Doing this second cost the Aug 5
+    championship result a full day.
+    """
+    changed = False
+    scheduled = parse_schedule()
+    if not scheduled:
+        return changed
     for date, info in sorted(scheduled.items()):
         game = games_by_date.get(date)
         if game is None:
@@ -393,6 +439,15 @@ if scheduled:
                 game['opponent'] = info['opponent']
                 changed = True
     seed['games'].sort(key=lambda g: g['date'])
+    return changed
+
+
+# Schedule first: it resolves TBD opponents and adds new dates, both of which
+# the box-score matcher depends on to tie a game id to a date.
+if sync_schedule():
+    changed = True
+if ingest_box_scores():
+    changed = True
 
 if changed:
     seed['formatVersion'] = 1

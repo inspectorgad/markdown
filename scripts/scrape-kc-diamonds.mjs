@@ -209,21 +209,36 @@ for (const id of ids) {
     const wrap = await textOf(page);
     let boxAway = '';
     let boxKC = '';
-    try {
-      await page.getByText('BOX', { exact: true }).first().click();
-      await page.waitForTimeout(4_000);
-      boxAway = await textOf(page);
-      // The BOX view has a team toggle; click the KC Diamonds side.
-      await page.evaluate(() => {
-        const els = Array.from(document.querySelectorAll('*')).filter(
-          (e) => e.children.length === 0 && e.textContent.trim() === 'KC Diamonds'
-        );
-        if (els.length) els[els.length - 1].click();
-      });
-      await page.waitForTimeout(4_000);
-      boxKC = await textOf(page);
-    } catch (e) {
-      boxAway = boxAway || `BOX TAB ERROR: ${e.message}`;
+    // The BOX tab sometimes takes longer than one click's patience to appear -
+    // freshly-finished games are the worst offenders, and losing the tab costs
+    // every batting line for that game. Retry with a reload before giving up.
+    let lastErr = '';
+    for (let attempt = 1; attempt <= 3 && !boxKC.includes('Batters\t'); attempt++) {
+      try {
+        if (attempt > 1) {
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
+          await page.waitForTimeout(6_000);
+        }
+        await page.getByText('BOX', { exact: true }).first()
+          .click({ timeout: 45_000 });
+        await page.waitForTimeout(5_000);
+        boxAway = await textOf(page);
+        // The BOX view has a team toggle; click the KC Diamonds side.
+        await page.evaluate(() => {
+          const els = Array.from(document.querySelectorAll('*')).filter(
+            (e) => e.children.length === 0 && e.textContent.trim() === 'KC Diamonds'
+          );
+          if (els.length) els[els.length - 1].click();
+        });
+        await page.waitForTimeout(5_000);
+        boxKC = await textOf(page);
+      } catch (e) {
+        lastErr = e.message;
+        console.log(`${name}: BOX attempt ${attempt} failed - ${e.message.split('\n')[0]}`);
+      }
+    }
+    if (!boxKC.includes('Batters\t') && lastErr) {
+      boxAway = boxAway || `BOX TAB ERROR: ${lastErr}`;
     }
     fs.writeFileSync(
       `scraped/${name}.json`,
