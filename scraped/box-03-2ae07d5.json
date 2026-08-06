@@ -2,6 +2,6 @@
   "id": "2ae07d5",
   "url": "https://www.ballclubz.com/kcdiamonds/live/2ae07d5",
   "wrap": "\t1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\tR\tH\tE\tL\nKC Diamonds\t\t\t\t\t\t\t\t\t\t\t\t\t0\t\t\t\nPuerto Rico\t\t\t\t\t\t\t\t\t\t\t\t\t0\t\t\t\n0-0   0 out\nThis game is not available.\nIt either has not started or is not being scored live",
-  "boxAway": "BOX TAB ERROR: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByText('BOX', { exact: true }).first()\n",
+  "boxAway": "BOX TAB ERROR: locator.click: Timeout 45000ms exceeded.\nCall log:\n  - waiting for getByText('BOX', { exact: true }).first()\n",
   "boxKC": ""
 }
