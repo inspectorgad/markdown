@@ -10,6 +10,7 @@ e.g. the duplication cascade of Jul 2026 (a box score applied to two dates
 inflates a player's totals above the official numbers). Lag — the seed
 missing a game the official page already counts — is only a warning.
 """
+import datetime
 import json
 import re
 import sys
@@ -120,6 +121,43 @@ for j, o in official.items():
         elif a[k] < o[k]:
             warnings.append(
                 f"{a['name']} {k.upper()} lag: seed {a[k]} vs official {o[k]}")
+
+# Cross-check every finished game against the date BallClubz publishes for it.
+# Totals alone cannot catch a misdating: putting the Aug 7 result on Aug 6 keeps
+# the record and every batting total correct while showing the wrong day in the
+# app. Only comparing dates directly catches that, so it is a hard failure.
+try:
+    sched_lines = [l.strip() for l in
+                   open('scraped/ballclubz-schedule.txt').read().split('\n')]
+except FileNotFoundError:
+    sched_lines = []
+seed_by_date = {g['date']: g for g in seed['games']}
+for i, line in enumerate(sched_lines):
+    md = re.match(r'^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})/(\d{1,2})$', line)
+    if not md:
+        continue
+    block = [l for l in sched_lines[i + 1:i + 5] if l]
+    res = next((l for l in block if re.match(r'^[WL]\s+\d+-\d+$', l)), None)
+    if not res:
+        continue                                    # not played yet
+    us, them = (int(x) for x in res.split()[1].split('-'))
+    date = f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}'
+    game = seed_by_date.get(date)
+    if game is None or 'teamScore' not in game:
+        # The result exists upstream but this date carries no score. If some
+        # OTHER date claims exactly this score, the game has been misdated.
+        holder = next((g['date'] for g in seed['games']
+                       if g.get('teamScore') == us and g.get('opponentScore') == them
+                       and g['date'] != date and abs(
+                           (datetime.date.fromisoformat(g['date'])
+                            - datetime.date.fromisoformat(date)).days) <= 3), None)
+        if holder:
+            failures.append(f'MISDATED: BallClubz has {us}-{them} on {date}, '
+                            f'but the seed records it on {holder}')
+    elif (game['teamScore'], game['opponentScore']) != (us, them):
+        failures.append(
+            f"{date}: seed says {game['teamScore']}-{game['opponentScore']}, "
+            f'BallClubz says {us}-{them}')
 
 # A duplicated game shows up as a wrong record and/or a whole lineup drifting.
 systemic = len(over) >= 3 or seed_w > off_w or seed_l > off_l

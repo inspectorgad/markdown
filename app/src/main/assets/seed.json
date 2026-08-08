@@ -6561,6 +6561,13 @@
     },
     {
       "date": "2026-08-06",
+      "opponent": "TBD",
+      "season": "2026 Postseason",
+      "location": "6450 Husky Pkwy, Trussville, AL 35173",
+      "event": "PSL Championship"
+    },
+    {
+      "date": "2026-08-07",
       "opponent": "Florida Vibe",
       "season": "2026 Postseason",
       "location": "6450 Husky Pkwy, Trussville, AL 35173",
@@ -6722,13 +6729,6 @@
       ]
     },
     {
-      "date": "2026-08-07",
-      "opponent": "TBD",
-      "season": "2026 Postseason",
-      "location": "6450 Husky Pkwy, Trussville, AL 35173",
-      "event": "PSL Championship"
-    },
-    {
       "date": "2026-08-08",
       "opponent": "TBD",
       "season": "2026 Postseason",
@@ -6749,5 +6749,5 @@
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-08-08T09:56:55Z"
+  "generatedAt": "2026-08-08T13:07:08Z"
 }

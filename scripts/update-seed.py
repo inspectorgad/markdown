@@ -172,6 +172,39 @@ def is_tbd(opp):
     return not opp or opp.strip().upper() == 'TBD'
 
 
+def ballclubz_results():
+    """[(date, opponent, us, them)] from BallClubz's own schedule listing.
+
+    The listing states the date of every finished game outright:
+        Fri 8/7
+        VS. Florida Vibe
+        W 4-3
+    That is far stronger evidence than guessing which score-less date a loose
+    game id belongs to, and it is the only thing that distinguishes a real
+    date from a placeholder the team published but never played.
+    """
+    try:
+        lines = [l.strip() for l in
+                 open('scraped/ballclubz-schedule.txt').read().split('\n')]
+    except FileNotFoundError:
+        return []
+    out = []
+    for i, line in enumerate(lines):
+        md = re.match(r'^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})/(\d{1,2})$', line)
+        if not md:
+            continue
+        block = [l for l in lines[i + 1:i + 5] if l]
+        opp = next((l for l in block if re.match(r'^(VS\.|@)\s', l)), None)
+        res = next((l for l in block if re.match(r'^[WL]\s+\d+-\d+$', l)), None)
+        if not (opp and res):
+            continue                       # PREVIEW / unplayed
+        us, them = (int(x) for x in res.split()[1].split('-'))
+        name = re.sub(r'^(VS\.|@)\s+', '', opp).strip()
+        out.append((f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}',
+                    CANONICAL_OPP.get(name.upper(), name), us, them))
+    return out
+
+
 def opponent_from_wrap(wrap):
     """The non-KC team named in the box score's line-score rows, or None.
 
@@ -270,15 +303,28 @@ def ingest_box_scores():
             continue
         date = id_to_date.get(gid)
         if not date:
-            # Chronological fallback: earliest past seed game still without a
-            # score whose opponent matches the line score. A game the site
-            # still lists as TBD matches any opponent - an undrawn bracket is
-            # exactly when we must trust the box score over the schedule.
+            # BallClubz states the date of each finished game in its schedule
+            # listing. Matching this result to that listing pins the date on
+            # evidence. Guessing the earliest score-less date instead once put
+            # the Aug 7 win on Aug 6, because a placeholder TBD date sorted
+            # first and matched anything.
+            for sched_date, opp, us, them in ballclubz_results():
+                if (us, them) == res and opponent_matches(opp, wrap) \
+                        and sched_date not in id_to_date.values():
+                    date = sched_date
+                    id_to_date[gid] = sched_date
+                    print(f'dated {gid} -> {sched_date} vs {opp} ({us}-{them}) '
+                          f'from the BallClubz schedule')
+                    break
+        if not date:
+            # Last resort: earliest past seed game still without a score whose
+            # opponent matches. A TBD date is NOT a wildcard here - an undrawn
+            # bracket often lists days that are never played, and letting one
+            # absorb a result silently misdates it.
             for g in sorted(seed['games'], key=lambda x: x['date']):
                 if g['date'] <= today and 'teamScore' not in g \
                         and g['date'] not in id_to_date.values() \
-                        and (is_tbd(g['opponent'])
-                             or opponent_matches(g['opponent'], wrap)):
+                        and opponent_matches(g['opponent'], wrap):
                     date = g['date']
                     id_to_date[gid] = date
                     print(f'inferred: {gid} -> {date} vs {g["opponent"]}')
