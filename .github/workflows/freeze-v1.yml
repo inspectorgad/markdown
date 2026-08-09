@@ -1,6 +1,6 @@
 name: Freeze v1 stable release
 
-# One-off: snapshots the current app-debug.apk from the rolling latest-apk
+# One-off: snapshots the current kc-diamonds.apk from the rolling latest-apk
 # release into an immutable v1-stable release, as a permanent known-good
 # fallback build that later development never overwrites.
 on:
@@ -27,10 +27,10 @@ jobs:
             echo "v1-stable already exists; leaving it untouched."
             exit 0
           fi
-          gh release download latest-apk --repo "$GITHUB_REPOSITORY" --pattern app-debug.apk
+          gh release download latest-apk --repo "$GITHUB_REPOSITORY" --pattern kc-diamonds.apk
           # --latest=false keeps the rolling latest-apk release as the target
           # of /releases/latest/download/ URLs.
-          gh release create v1-stable app-debug.apk \
+          gh release create v1-stable kc-diamonds.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --latest=false \
