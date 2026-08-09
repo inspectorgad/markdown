@@ -291,6 +291,28 @@ for g in seed['games']:
         g['lines'] = rebuilt
         changed = True
 
+def schedule_scores():
+    """{date: (us, them)} for dates the schedule reports consistently.
+
+    The page renders its game list more than once, so a date can appear twice.
+    When two rows for one date disagree, we cannot tell which game is which -
+    drop the date rather than pick whichever was parsed first. Aug 8 was read
+    as 8-2 by this path and 7-8 by the verifier for exactly that reason.
+    """
+    seen = {}
+    conflicted = set()
+    for date, _opp, us, them in ballclubz_results():
+        if date in seen and seen[date] != (us, them):
+            conflicted.add(date)
+        seen.setdefault(date, (us, them))
+    for date in sorted(conflicted):
+        print(f'!! {date}: schedule lists conflicting scores '
+              f'({seen[date][0]}-{seen[date][1]} and others); ignoring the date',
+              file=sys.stderr)
+        seen.pop(date, None)
+    return seen
+
+
 def ingest_schedule_results():
     """Record scores BallClubz publishes in its schedule listing.
 
@@ -299,9 +321,10 @@ def ingest_schedule_results():
     Batting lines still come from the box; this only fills the score.
     """
     changed = False
+    ok = schedule_scores()
     for date, opp, us, them in ballclubz_results():
         game = games_by_date.get(date)
-        if game is None or 'teamScore' in game:
+        if game is None or 'teamScore' in game or ok.get(date) != (us, them):
             continue
         game['teamScore'], game['opponentScore'] = us, them
         if is_tbd(game.get('opponent')) and opp:
@@ -314,7 +337,7 @@ def ingest_schedule_results():
 def ingest_box_scores():
     """Fold every published BallClubz box score into the seed."""
     changed = False
-    sched_by_date = {d: (us, them) for d, _, us, them in ballclubz_results()}
+    sched_by_date = schedule_scores()
     for f in sorted(glob.glob('scraped/box-*.json')):
         d = json.load(open(f))
         gid = d.get('id') or d['url'].rsplit('/', 1)[1]

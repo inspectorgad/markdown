@@ -51,14 +51,23 @@ jobs:
           # (which conflicts on regenerated files), rewind to whatever landed,
           # drop the fresh capture on top, and re-derive the seed with main's
           # current parser.
+          # Cross-checking against the official aggregates gates the SEED only.
+          # The raw capture is committed either way: a failed verify used to
+          # discard the entire run, taking with it the very files needed to
+          # diagnose the failure, so the same bad parse could not be
+          # investigated without waiting for another 15-minute scrape.
+          VERIFIED=1
           rebuild() {
             git fetch origin main
             git reset --hard origin/main
             rm -rf scraped && mkdir -p scraped && cp -a /tmp/capture/. scraped/
             python3 scripts/update-seed.py
-            # Cross-check against the official aggregates BEFORE anything is
-            # committed: over-counts (a box score applied twice) fail the run.
-            python3 scripts/verify-seed.py
+            VERIFIED=1
+            python3 scripts/verify-seed.py || VERIFIED=0
+            if [ "$VERIFIED" = "0" ]; then
+              echo "::error::verify-seed failed - keeping the capture as evidence, NOT shipping the seed"
+              git checkout -- app/src/main/assets/seed.json
+            fi
           }
 
           rebuild
@@ -68,8 +77,10 @@ jobs:
             git add -f scraped/
             git diff --cached --quiet || git commit -m "Update scraped KC Diamonds data [skip ci]"
             SEED_CHANGED=0
-            git add app/src/main/assets/seed.json
-            git diff --cached --quiet || { git commit -m "Update season data from nightly scrape"; SEED_CHANGED=1; }
+            if [ "$VERIFIED" = "1" ]; then
+              git add app/src/main/assets/seed.json
+              git diff --cached --quiet || { git commit -m "Update season data from nightly scrape"; SEED_CHANGED=1; }
+            fi
             if git push; then PUSHED=1; break; fi
             echo "push rejected (attempt $attempt); re-deriving on top of latest main"
             sleep $((attempt * 5))
@@ -77,6 +88,11 @@ jobs:
           done
           if [ "$PUSHED" != "1" ]; then
             echo "::error::could not push the scrape after 3 attempts"
+            exit 1
+          fi
+          # The capture is safely committed; now fail loudly so the alert fires.
+          if [ "$VERIFIED" = "0" ]; then
+            echo "::error::seed rejected by verify-seed; capture committed for diagnosis"
             exit 1
           fi
           # Pushes made with GITHUB_TOKEN do not trigger other workflows, so
