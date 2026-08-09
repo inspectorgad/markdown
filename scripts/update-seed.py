@@ -157,10 +157,30 @@ def parse_box_kc(text):
 
 def parse_result(wrap):
     m = re.search(r'([A-Za-z .]+?) wins (\d+)-(\d+)', wrap)
-    if not m:
+    if m:
+        winner, a, b = m.group(1).strip(), int(m.group(2)), int(m.group(3))
+        return (a, b) if winner == 'KC Diamonds' else (b, a)
+    # Not every finished game renders the "X wins N-N" summary - the second
+    # game of the Aug 8 doubleheader did not, which would have cost its whole
+    # box score. The line score still states the runs:
+    #     KC Diamonds  0 0 3 1 1 0 2   7 16  3 13
+    #     Atlanta Smok 1 4 2 1 0 0 X   8  5  1  3
+    # where the last four columns are R, H, E and LOB.
+    if 'Game Over' not in wrap:
         return None
-    winner, a, b = m.group(1).strip(), int(m.group(2)), int(m.group(3))
-    return (a, b) if winner == 'KC Diamonds' else (b, a)
+    kc = opp = None
+    for line in wrap.split('\n'):
+        cells = line.split('\t')
+        if len(cells) < 6 or not cells[0].strip():
+            continue
+        tail = cells[-4:]
+        if not all(c.strip().isdigit() for c in tail):
+            continue
+        if cells[0].strip() == 'KC Diamonds':
+            kc = int(tail[0])
+        else:
+            opp = int(tail[0])
+    return (kc, opp) if kc is not None and opp is not None else None
 
 
 def opponent_matches(opp, wrap):
@@ -292,25 +312,21 @@ for g in seed['games']:
         changed = True
 
 def schedule_scores():
-    """{date: (us, them)} for dates the schedule reports consistently.
+    """{date: [(opponent, us, them), ...]} - every game the schedule reports.
 
-    The page renders its game list more than once, so a date can appear twice.
-    When two rows for one date disagree, we cannot tell which game is which -
-    drop the date rather than pick whichever was parsed first. Aug 8 was read
-    as 8-2 by this path and 7-8 by the verifier for exactly that reason.
+    A date can carry more than one game: KC played an Aug 8 doubleheader at
+    Atlanta, winning 8-2 and losing 7-8. The page also renders its game list
+    twice, so the same row appears twice. The two cases are told apart by
+    content - identical rows are one game rendered twice, differing rows are
+    different games - which is why deduplication happens on the whole row and
+    not on the date.
     """
-    seen = {}
-    conflicted = set()
-    for date, _opp, us, them in ballclubz_results():
-        if date in seen and seen[date] != (us, them):
-            conflicted.add(date)
-        seen.setdefault(date, (us, them))
-    for date in sorted(conflicted):
-        print(f'!! {date}: schedule lists conflicting scores '
-              f'({seen[date][0]}-{seen[date][1]} and others); ignoring the date',
-              file=sys.stderr)
-        seen.pop(date, None)
-    return seen
+    out = collections.defaultdict(list)
+    for date, opp, us, them in ballclubz_results():
+        row = (opp, us, them)
+        if row not in out[date]:
+            out[date].append(row)
+    return dict(out)
 
 
 def ingest_schedule_results():
@@ -321,16 +337,33 @@ def ingest_schedule_results():
     Batting lines still come from the box; this only fills the score.
     """
     changed = False
-    ok = schedule_scores()
-    for date, opp, us, them in ballclubz_results():
-        game = games_by_date.get(date)
-        if game is None or 'teamScore' in game or ok.get(date) != (us, them):
-            continue
-        game['teamScore'], game['opponentScore'] = us, them
-        if is_tbd(game.get('opponent')) and opp:
-            game['opponent'] = opp
-        print(f'schedule result: {date} vs {game["opponent"]} {us}-{them}')
-        changed = True
+    for date, rows in sorted(schedule_scores().items()):
+        on_date = [g for g in seed['games'] if g['date'] == date]
+        for opp, us, them in rows:
+            # Already recorded? Match on the score so a doubleheader's two
+            # games stay distinct instead of overwriting each other.
+            if any(g.get('teamScore') == us and g.get('opponentScore') == them
+                   for g in on_date):
+                continue
+            game = next((g for g in on_date if 'teamScore' not in g), None)
+            if game is None:
+                # A second game on a day the schedule only listed once. Create
+                # it rather than drop it - this is the Aug 8 doubleheader.
+                template = on_date[0] if on_date else {}
+                game = {'date': date, 'opponent': opp or 'TBD',
+                        'season': template.get('season', season_for(date, opp))}
+                for k in ('event', 'location'):
+                    if template.get(k):
+                        game[k] = template[k]
+                seed['games'].append(game)
+                on_date.append(game)
+                print(f'schedule: added a second game on {date} vs {opp}')
+            if is_tbd(game.get('opponent')) and opp:
+                game['opponent'] = opp
+            game['teamScore'], game['opponentScore'] = us, them
+            print(f'schedule result: {date} vs {game["opponent"]} {us}-{them}')
+            changed = True
+    seed['games'].sort(key=lambda g: (g['date'], g.get('teamScore') is None))
     return changed
 
 
@@ -352,9 +385,9 @@ def ingest_box_scores():
             # must be UNIQUE: scores repeat across a season, and binding to
             # whichever row happened to be found first attached an 8-2 box to
             # Aug 8, whose real result was 7-8.
-            hits = [(d, opp) for d, opp, us, them in ballclubz_results()
-                    if (us, them) == res and opponent_matches(opp, wrap)
-                    and d not in id_to_date.values()]
+            hits = sorted({(sd, opp) for sd, rows in schedule_scores().items()
+                           for opp, us, them in rows
+                           if (us, them) == res and opponent_matches(opp, wrap)})
             if len(hits) == 1:
                 date, opp = hits[0]
                 id_to_date[gid] = date
@@ -380,16 +413,25 @@ def ingest_box_scores():
         if not date:
             print(f'unmapped game id {gid} (result {res}), skipping', file=sys.stderr)
             continue
-        game = games_by_date.get(date)
+        # Pick the game on that date this box actually belongs to: the one
+        # already tagged with this id, else the one whose score matches, else
+        # an unscored slot. Matching on score is what keeps a doubleheader's
+        # two games apart.
+        on_date = [g for g in seed['games'] if g['date'] == date]
+        game = next((g for g in on_date if g.get('srcId') == gid), None) \
+            or next((g for g in on_date
+                     if g.get('teamScore') == res[0]
+                     and g.get('opponentScore') == res[1]
+                     and g.get('srcId') in (None, gid)), None) \
+            or next((g for g in on_date if 'teamScore' not in g), None)
         if game is None:
             continue  # not a scheduled KC game we know about
-        # BallClubz's schedule row is the authority on what happened that day.
-        # If this box disagrees with it, the box belongs to a different game -
-        # never let it overwrite the day, and never guess which is right.
-        official = sched_by_date.get(date)
-        if official and official != res:
-            print(f'!! {date}: box score says {res[0]}-{res[1]} but the '
-                  f'BallClubz schedule says {official[0]}-{official[1]}; '
+        # The schedule row is the authority on what happened. If no row on this
+        # date carries this score, the box belongs to a different game.
+        rows = schedule_scores().get(date)
+        if rows and res not in [(u, t) for _o, u, t in rows]:
+            print(f'!! {date}: box score says {res[0]}-{res[1]} but the schedule '
+                  f'lists only {", ".join(f"{u}-{t}" for _o, u, t in rows)}; '
                   f'{gid} is not this game, skipping', file=sys.stderr)
             continue
         # Adopt the opponent the box score names while the schedule says TBD.

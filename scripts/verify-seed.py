@@ -97,11 +97,12 @@ for g in seed['games']:
 
 failures, warnings = [], []
 
-if off_w or off_l:
-    if seed_w > off_w or seed_l > off_l:
-        failures.append(f'record OVER-COUNT: seed {seed_w}-{seed_l} vs official {off_w}-{off_l}')
-    elif (seed_w, seed_l) != (off_w, off_l):
-        warnings.append(f'record lag: seed {seed_w}-{seed_l} vs official {off_w}-{off_l}')
+if (off_w or off_l) and (seed_w, seed_l) != (off_w, off_l) \
+        and seed_w <= off_w and seed_l <= off_l:
+    warnings.append(f'record lag: seed {seed_w}-{seed_l} vs official {off_w}-{off_l}')
+# The seed LEADING the official record is judged further down, once we know
+# whether every game is corroborated by the schedule listing. The aggregate
+# page lags that listing, so leading it is normal in the hours after a game.
 
 # Over-counts are graded, because they have two very different causes:
 #   * a box score applied to two dates inflates MANY players at once, usually
@@ -131,7 +132,11 @@ try:
                    open('scraped/ballclubz-schedule.txt').read().split('\n')]
 except FileNotFoundError:
     sched_lines = []
-seed_by_date = {g['date']: g for g in seed['games']}
+# Build the set of games BallClubz publishes, as (date, us, them). A date can
+# hold more than one game - KC played an Aug 8 doubleheader - and the page
+# renders its list twice, so identical rows are deduplicated while differing
+# rows on one date are kept as the separate games they are.
+published = set()
 for i, line in enumerate(sched_lines):
     md = re.match(r'^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})/(\d{1,2})$', line)
     if not md:
@@ -141,26 +146,46 @@ for i, line in enumerate(sched_lines):
     if not res:
         continue                                    # not played yet
     us, them = (int(x) for x in res.split()[1].split('-'))
-    date = f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}'
-    game = seed_by_date.get(date)
-    if game is None or 'teamScore' not in game:
-        # The result exists upstream but this date carries no score. If some
-        # OTHER date claims exactly this score, the game has been misdated.
-        holder = next((g['date'] for g in seed['games']
-                       if g.get('teamScore') == us and g.get('opponentScore') == them
-                       and g['date'] != date and abs(
-                           (datetime.date.fromisoformat(g['date'])
-                            - datetime.date.fromisoformat(date)).days) <= 3), None)
+    published.add((f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}', us, them))
+
+# Every scored game in the seed must be one BallClubz actually published on
+# that date. This is the check that catches a misdating, which no totals-based
+# check can see: moving a result one day leaves the record and every batting
+# total correct.
+scored_games = [g for g in seed['games'] if 'teamScore' in g]
+uncorroborated = []
+if published:
+    for g in scored_games:
+        if (g['date'], g['teamScore'], g['opponentScore']) not in published:
+            uncorroborated.append(g)
+    for g in uncorroborated:
+        holder = next((d for d, u, t in published
+                       if (u, t) == (g['teamScore'], g['opponentScore'])
+                       and d != g['date']), None)
         if holder:
-            failures.append(f'MISDATED: BallClubz has {us}-{them} on {date}, '
-                            f'but the seed records it on {holder}')
-    elif (game['teamScore'], game['opponentScore']) != (us, them):
-        failures.append(
-            f"{date}: seed says {game['teamScore']}-{game['opponentScore']}, "
-            f'BallClubz says {us}-{them}')
+            failures.append(
+                f"MISDATED: seed has {g['teamScore']}-{g['opponentScore']} on "
+                f"{g['date']}, BallClubz publishes it on {holder}")
+        else:
+            failures.append(
+                f"{g['date']}: seed records {g['teamScore']}-{g['opponentScore']}, "
+                'which BallClubz does not publish for that date')
 
 # A duplicated game shows up as a wrong record and/or a whole lineup drifting.
-systemic = len(over) >= 3 or seed_w > off_w or seed_l > off_l
+# The official aggregate lags the schedule listing by a day or more, so a
+# seed that leads it is normal right after a game. It is only corruption if
+# a game is ALSO unaccounted for upstream - that is what double-counting
+# looks like, and it is caught above as uncorroborated.
+ahead = (off_w or off_l) and (seed_w > off_w or seed_l > off_l)
+if ahead and uncorroborated:
+    failures.append(
+        f'record OVER-COUNT: seed {seed_w}-{seed_l} vs official {off_w}-{off_l} '
+        'with games the schedule does not publish')
+elif ahead:
+    warnings.append(
+        f'seed {seed_w}-{seed_l} leads official {off_w}-{off_l}; every game is '
+        'published upstream, so the aggregate page is simply behind')
+systemic = len(over) >= 3 and bool(uncorroborated) or bool(uncorroborated)
 for j, msgs in over.items():
     (failures if systemic else warnings).extend(msgs)
 if over and not systemic:

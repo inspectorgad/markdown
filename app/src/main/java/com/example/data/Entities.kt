@@ -24,7 +24,10 @@ data class Game(
     val teamScore: Int? = null,
     val opponentScore: Int? = null,
     val event: String = "",
-    val location: String = ""
+    val location: String = "",
+    // The upstream game id. A date is not a unique key: KC played an Aug 8
+    // doubleheader, so two games share a date and only this tells them apart.
+    val srcId: String = ""
 )
 
 @Entity(

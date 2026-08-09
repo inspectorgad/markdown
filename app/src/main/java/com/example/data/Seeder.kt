@@ -58,7 +58,9 @@ object Seeder {
             }
         }
 
-        val gamesByDate = dao.gamesOnce().associateBy { it.date }
+        val stored = dao.gamesOnce()
+        val gamesBySrc = stored.filter { it.srcId.isNotEmpty() }.associateBy { it.srcId }
+        val gamesByDate = stored.groupBy { it.date }
         val gamesWithLines = dao.statLinesOnce().map { it.gameId }.toSet()
 
         val games = root.optJSONArray("games") ?: return
@@ -68,7 +70,18 @@ object Seeder {
             val seedTeamScore = if (g.has("teamScore")) g.getInt("teamScore") else null
             val seedOppScore = if (g.has("opponentScore")) g.getInt("opponentScore") else null
 
-            val existing = gamesByDate[date]
+            // Identify the game by its upstream id where we have one. Two games
+            // can share a date (an Aug 8 doubleheader), so keying on date alone
+            // made the second overwrite the first.
+            val seedSrcId = g.optString("srcId", "")
+            val onDate = gamesByDate[date].orEmpty()
+            val existing = gamesBySrc[seedSrcId]
+                ?: onDate.firstOrNull {
+                    it.srcId.isEmpty() &&
+                        it.teamScore == seedTeamScore && it.opponentScore == seedOppScore
+                }
+                ?: onDate.firstOrNull { it.srcId.isEmpty() && it.teamScore == null }
+                ?: onDate.singleOrNull().takeIf { seedSrcId.isEmpty() }
             val gameId: Long
             if (existing == null) {
                 gameId = dao.insertGame(
@@ -79,7 +92,8 @@ object Seeder {
                         teamScore = seedTeamScore,
                         opponentScore = seedOppScore,
                         event = g.optString("event", ""),
-                        location = g.optString("location", "")
+                        location = g.optString("location", ""),
+                        srcId = seedSrcId
                     )
                 )
             } else {
@@ -90,14 +104,18 @@ object Seeder {
                     (seedTeamScore != null || seedOppScore != null)
                 val detailsChanged = (seedEvent.isNotEmpty() && seedEvent != existing.event) ||
                     (seedLocation.isNotEmpty() && seedLocation != existing.location)
-                if (scoreArrived || detailsChanged) {
+                // Stamping the id onto a row we matched by score lets the next
+                // sync find it directly rather than re-matching.
+                val srcIdArrived = seedSrcId.isNotEmpty() && existing.srcId.isEmpty()
+                if (scoreArrived || detailsChanged || srcIdArrived) {
                     dao.updateGame(
                         existing.copy(
                             teamScore = if (scoreArrived) seedTeamScore else existing.teamScore,
                             opponentScore =
                                 if (scoreArrived) seedOppScore else existing.opponentScore,
                             event = seedEvent.ifEmpty { existing.event },
-                            location = seedLocation.ifEmpty { existing.location }
+                            location = seedLocation.ifEmpty { existing.location },
+                            srcId = if (srcIdArrived) seedSrcId else existing.srcId
                         )
                     )
                 }

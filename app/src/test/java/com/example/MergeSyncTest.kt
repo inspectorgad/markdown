@@ -51,6 +51,52 @@ class MergeSyncTest {
         """
     )
 
+    /** Two games on one date, told apart only by their upstream ids. */
+    private fun doubleheaderJson(): JSONObject = JSONObject(
+        """
+        {
+          "players": [{"name": "Ada Alpha", "jerseyNumber": "1", "position": "SS"}],
+          "games": [
+            {"date": "2026-08-08", "opponent": "Atlanta Smoke", "season": "2026",
+             "teamScore": 8, "opponentScore": 2, "srcId": "aaa111"},
+            {"date": "2026-08-08", "opponent": "Atlanta Smoke", "season": "2026",
+             "teamScore": 7, "opponentScore": 8, "srcId": "bbb222"}
+          ]
+        }
+        """
+    )
+
+    @Test
+    fun `both games of a doubleheader survive the merge`() = runTest {
+        Seeder.merge(doubleheaderJson(), db.dao())
+        val games = db.dao().gamesOnce().filter { it.date == "2026-08-08" }
+        assertEquals(2, games.size)
+        assertEquals(setOf("aaa111", "bbb222"), games.map { it.srcId }.toSet())
+        assertEquals(setOf(8 to 2, 7 to 8), games.map { it.teamScore to it.opponentScore }.toSet())
+    }
+
+    @Test
+    fun `re-syncing a doubleheader does not duplicate or merge its games`() = runTest {
+        Seeder.merge(doubleheaderJson(), db.dao())
+        Seeder.merge(doubleheaderJson(), db.dao())
+        assertEquals(2, db.dao().gamesOnce().count { it.date == "2026-08-08" })
+    }
+
+    @Test
+    fun `a scheduled slot is claimed by the first game, not overwritten by the second`() =
+        runTest {
+            // The app already holds the placeholder the schedule published.
+            db.dao().insertGame(
+                com.example.data.Game(
+                    date = "2026-08-08", opponent = "TBD", season = "2026"
+                )
+            )
+            Seeder.merge(doubleheaderJson(), db.dao())
+            val games = db.dao().gamesOnce().filter { it.date == "2026-08-08" }
+            assertEquals(2, games.size)
+            assertEquals(setOf(8 to 2, 7 to 8), games.map { it.teamScore to it.opponentScore }.toSet())
+        }
+
     @Test
     fun `merge into empty database inserts everything`() = runTest {
         Seeder.merge(seedJson(), db.dao())
