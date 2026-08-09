@@ -62,6 +62,9 @@ object Seeder {
         // second game of a doubleheader re-match the row the first had just
         // claimed, so the two games collapsed into one.
         val stored = dao.gamesOnce().toMutableList()
+        // Rows already matched this pass. Without this, the second game of a
+        // doubleheader re-matches the row the first just took.
+        val claimed = mutableSetOf<Long>()
         val gamesWithLines = dao.statLinesOnce().map { it.gameId }.toSet()
 
         val games = root.optJSONArray("games") ?: return
@@ -75,7 +78,7 @@ object Seeder {
             // can share a date (an Aug 8 doubleheader), so keying on date alone
             // made the second overwrite the first.
             val seedSrcId = g.optString("srcId", "")
-            val onDate = stored.filter { it.date == date }
+            val onDate = stored.filter { it.date == date && it.id !in claimed }
             val existing = stored.firstOrNull {
                 seedSrcId.isNotEmpty() && it.srcId == seedSrcId
             }
@@ -84,6 +87,11 @@ object Seeder {
                         it.teamScore == seedTeamScore && it.opponentScore == seedOppScore
                 }
                 ?: onDate.firstOrNull { it.srcId.isEmpty() && it.teamScore == null }
+                // With no id to go on we cannot be looking at a second game, so
+                // reuse the day's row rather than inserting a duplicate. This
+                // is the path an upstream score correction arrives by, and the
+                // update below leaves an existing score untouched.
+                ?: onDate.firstOrNull { it.srcId.isEmpty() && seedSrcId.isEmpty() }
             val gameId: Long
             if (existing == null) {
                 val fresh = Game(
@@ -98,8 +106,10 @@ object Seeder {
                 )
                 gameId = dao.insertGame(fresh)
                 stored += fresh.copy(id = gameId)
+                claimed += gameId
             } else {
                 gameId = existing.id
+                claimed += gameId
                 val seedEvent = g.optString("event", "")
                 val seedLocation = g.optString("location", "")
                 val scoreArrived = existing.teamScore == null && existing.opponentScore == null &&
