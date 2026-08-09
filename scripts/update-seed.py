@@ -291,9 +291,30 @@ for g in seed['games']:
         g['lines'] = rebuilt
         changed = True
 
+def ingest_schedule_results():
+    """Record scores BallClubz publishes in its schedule listing.
+
+    A final is listed there whether or not a box score is reachable, so a game
+    is never left blank in the app merely because no box could be tied to it.
+    Batting lines still come from the box; this only fills the score.
+    """
+    changed = False
+    for date, opp, us, them in ballclubz_results():
+        game = games_by_date.get(date)
+        if game is None or 'teamScore' in game:
+            continue
+        game['teamScore'], game['opponentScore'] = us, them
+        if is_tbd(game.get('opponent')) and opp:
+            game['opponent'] = opp
+        print(f'schedule result: {date} vs {game["opponent"]} {us}-{them}')
+        changed = True
+    return changed
+
+
 def ingest_box_scores():
     """Fold every published BallClubz box score into the seed."""
     changed = False
+    sched_by_date = {d: (us, them) for d, _, us, them in ballclubz_results()}
     for f in sorted(glob.glob('scraped/box-*.json')):
         d = json.load(open(f))
         gid = d.get('id') or d['url'].rsplit('/', 1)[1]
@@ -304,18 +325,22 @@ def ingest_box_scores():
         date = id_to_date.get(gid)
         if not date:
             # BallClubz states the date of each finished game in its schedule
-            # listing. Matching this result to that listing pins the date on
-            # evidence. Guessing the earliest score-less date instead once put
-            # the Aug 7 win on Aug 6, because a placeholder TBD date sorted
-            # first and matched anything.
-            for sched_date, opp, us, them in ballclubz_results():
-                if (us, them) == res and opponent_matches(opp, wrap) \
-                        and sched_date not in id_to_date.values():
-                    date = sched_date
-                    id_to_date[gid] = sched_date
-                    print(f'dated {gid} -> {sched_date} vs {opp} ({us}-{them}) '
-                          f'from the BallClubz schedule')
-                    break
+            # listing, so match this result against that listing. The match
+            # must be UNIQUE: scores repeat across a season, and binding to
+            # whichever row happened to be found first attached an 8-2 box to
+            # Aug 8, whose real result was 7-8.
+            hits = [(d, opp) for d, opp, us, them in ballclubz_results()
+                    if (us, them) == res and opponent_matches(opp, wrap)
+                    and d not in id_to_date.values()]
+            if len(hits) == 1:
+                date, opp = hits[0]
+                id_to_date[gid] = date
+                print(f'dated {gid} -> {date} vs {opp} {res[0]}-{res[1]} '
+                      f'from the BallClubz schedule')
+            elif hits:
+                print(f'ambiguous: {gid} {res} matches {len(hits)} schedule rows '
+                      f'({", ".join(d for d, _ in hits)}), not dating it',
+                      file=sys.stderr)
         if not date:
             # Last resort: earliest past seed game still without a score whose
             # opponent matches. A TBD date is NOT a wildcard here - an undrawn
@@ -335,6 +360,15 @@ def ingest_box_scores():
         game = games_by_date.get(date)
         if game is None:
             continue  # not a scheduled KC game we know about
+        # BallClubz's schedule row is the authority on what happened that day.
+        # If this box disagrees with it, the box belongs to a different game -
+        # never let it overwrite the day, and never guess which is right.
+        official = sched_by_date.get(date)
+        if official and official != res:
+            print(f'!! {date}: box score says {res[0]}-{res[1]} but the '
+                  f'BallClubz schedule says {official[0]}-{official[1]}; '
+                  f'{gid} is not this game, skipping', file=sys.stderr)
+            continue
         # Adopt the opponent the box score names while the schedule says TBD.
         if is_tbd(game.get('opponent')):
             named = opponent_from_wrap(wrap)
@@ -514,6 +548,10 @@ def sync_schedule():
 # Schedule first: it resolves TBD opponents and adds new dates, both of which
 # the box-score matcher depends on to tie a game id to a date.
 if sync_schedule():
+    changed = True
+# Scores from the schedule listing first, so a box score can only ever enrich a
+# day the schedule already agrees on, never define one on its own.
+if ingest_schedule_results():
     changed = True
 if ingest_box_scores():
     changed = True
