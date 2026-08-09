@@ -58,9 +58,10 @@ object Seeder {
             }
         }
 
-        val stored = dao.gamesOnce()
-        val gamesBySrc = stored.filter { it.srcId.isNotEmpty() }.associateBy { it.srcId }
-        val gamesByDate = stored.groupBy { it.date }
+        // Kept in step with the database as we go. A stale snapshot let the
+        // second game of a doubleheader re-match the row the first had just
+        // claimed, so the two games collapsed into one.
+        val stored = dao.gamesOnce().toMutableList()
         val gamesWithLines = dao.statLinesOnce().map { it.gameId }.toSet()
 
         val games = root.optJSONArray("games") ?: return
@@ -74,28 +75,29 @@ object Seeder {
             // can share a date (an Aug 8 doubleheader), so keying on date alone
             // made the second overwrite the first.
             val seedSrcId = g.optString("srcId", "")
-            val onDate = gamesByDate[date].orEmpty()
-            val existing = gamesBySrc[seedSrcId]
+            val onDate = stored.filter { it.date == date }
+            val existing = stored.firstOrNull {
+                seedSrcId.isNotEmpty() && it.srcId == seedSrcId
+            }
                 ?: onDate.firstOrNull {
                     it.srcId.isEmpty() &&
                         it.teamScore == seedTeamScore && it.opponentScore == seedOppScore
                 }
                 ?: onDate.firstOrNull { it.srcId.isEmpty() && it.teamScore == null }
-                ?: onDate.singleOrNull().takeIf { seedSrcId.isEmpty() }
             val gameId: Long
             if (existing == null) {
-                gameId = dao.insertGame(
-                    Game(
-                        date = date,
-                        opponent = g.getString("opponent"),
-                        season = g.getString("season"),
-                        teamScore = seedTeamScore,
-                        opponentScore = seedOppScore,
-                        event = g.optString("event", ""),
-                        location = g.optString("location", ""),
-                        srcId = seedSrcId
-                    )
+                val fresh = Game(
+                    date = date,
+                    opponent = g.getString("opponent"),
+                    season = g.getString("season"),
+                    teamScore = seedTeamScore,
+                    opponentScore = seedOppScore,
+                    event = g.optString("event", ""),
+                    location = g.optString("location", ""),
+                    srcId = seedSrcId
                 )
+                gameId = dao.insertGame(fresh)
+                stored += fresh.copy(id = gameId)
             } else {
                 gameId = existing.id
                 val seedEvent = g.optString("event", "")
@@ -108,16 +110,16 @@ object Seeder {
                 // sync find it directly rather than re-matching.
                 val srcIdArrived = seedSrcId.isNotEmpty() && existing.srcId.isEmpty()
                 if (scoreArrived || detailsChanged || srcIdArrived) {
-                    dao.updateGame(
-                        existing.copy(
-                            teamScore = if (scoreArrived) seedTeamScore else existing.teamScore,
-                            opponentScore =
-                                if (scoreArrived) seedOppScore else existing.opponentScore,
-                            event = seedEvent.ifEmpty { existing.event },
-                            location = seedLocation.ifEmpty { existing.location },
-                            srcId = if (srcIdArrived) seedSrcId else existing.srcId
-                        )
+                    val updated = existing.copy(
+                        teamScore = if (scoreArrived) seedTeamScore else existing.teamScore,
+                        opponentScore =
+                            if (scoreArrived) seedOppScore else existing.opponentScore,
+                        event = seedEvent.ifEmpty { existing.event },
+                        location = seedLocation.ifEmpty { existing.location },
+                        srcId = if (srcIdArrived) seedSrcId else existing.srcId
                     )
+                    dao.updateGame(updated)
+                    stored[stored.indexOfFirst { it.id == existing.id }] = updated
                 }
             }
 
