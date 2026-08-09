@@ -6,18 +6,18 @@ Roster
 Team Info
 SCHEDULE
 SHOW / HIDE PAST GAMES
-Fri 7/31
-@ St Louis Gatekeepers
-W 10-0
-Sat 8/1
-@ St Louis Gatekeepers
-W 6-0
 Wed 8/5
 VS. Florida Vibe
 L 5-6
 Fri 8/7
 VS. Florida Vibe
 W 4-3
+Sat 8/8
+@ Atlanta Smoke
+W 8-2
+Sat 8/8
+@ Atlanta Smoke
+L 7-8
 View Team Statistics
 Players
 #	POS	LAST NAME	FIRST NAME	BATS	THROWS
