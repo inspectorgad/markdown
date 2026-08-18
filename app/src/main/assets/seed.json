@@ -7056,15 +7056,17 @@
       "date": "2026-10-10",
       "opponent": "Nebraska & KU",
       "season": "2026 Fall",
-      "event": "1:00 - KC Diamonds vs Nebraska / 4:00 - Nebraska vs KU / 7:00 - KU vs KC Diamonds"
+      "event": "1:00 - KC Diamonds vs Nebraska / 4:00 - Nebraska vs KU / 7:00 - KU vs KC Diamonds",
+      "location": "Legends Field | Kansas City, KS"
     },
     {
       "date": "2026-10-17",
       "opponent": "Missouri & Wichita State",
       "season": "2026 Fall",
-      "event": "1:00 - KC Diamonds vs Missouri / 4:00 - Missouri vs Wichita State / 7:00 - Wichita State vs KC Diamonds"
+      "event": "1:00 - KC Diamonds vs Missouri / 4:00 - Missouri vs Wichita State / 7:00 - Wichita State vs KC Diamonds",
+      "location": "Legends Field | Kansas City, KS"
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-08-09T15:34:55Z"
+  "generatedAt": "2026-08-18T09:53:18Z"
 }
