@@ -7054,19 +7054,33 @@
     },
     {
       "date": "2026-10-10",
-      "opponent": "Nebraska & KU",
+      "opponent": "KU",
+      "season": "2026 Fall",
+      "event": "1:00 - KC Diamonds vs Nebraska / 4:00 - Nebraska vs KU / 7:00 - KU vs KC Diamonds",
+      "location": "Legends Field | Kansas City, KS"
+    },
+    {
+      "date": "2026-10-10",
+      "opponent": "Nebraska",
       "season": "2026 Fall",
       "event": "1:00 - KC Diamonds vs Nebraska / 4:00 - Nebraska vs KU / 7:00 - KU vs KC Diamonds",
       "location": "Legends Field | Kansas City, KS"
     },
     {
       "date": "2026-10-17",
-      "opponent": "Missouri & Wichita State",
+      "opponent": "Missouri",
+      "season": "2026 Fall",
+      "event": "1:00 - KC Diamonds vs Missouri / 4:00 - Missouri vs Wichita State / 7:00 - Wichita State vs KC Diamonds",
+      "location": "Legends Field | Kansas City, KS"
+    },
+    {
+      "date": "2026-10-17",
+      "opponent": "Wichita State",
       "season": "2026 Fall",
       "event": "1:00 - KC Diamonds vs Missouri / 4:00 - Missouri vs Wichita State / 7:00 - Wichita State vs KC Diamonds",
       "location": "Legends Field | Kansas City, KS"
     }
   ],
   "formatVersion": 1,
-  "generatedAt": "2026-08-18T09:53:18Z"
+  "generatedAt": "2026-08-19T13:13:49Z"
 }

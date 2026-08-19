@@ -171,6 +171,20 @@ if published:
                 f"{g['date']}: seed records {g['teamScore']}-{g['opponentScore']}, "
                 'which BallClubz does not publish for that date')
 
+# An opponent must be one team. Two shapes have gone wrong here: a combined
+# placeholder invented for a multi-team day ("Nebraska & KU"), and a whole
+# pairing title leaking through the schedule parser ("University Of Kansas Vs.
+# University Of Nebraska"). Both put a fixture in the app against a team that
+# does not exist, so both are hard failures.
+for g in seed['games']:
+    opp = g.get('opponent') or ''
+    if re.search(r'\bvs\.?\b', opp, re.I):
+        failures.append(f"{g['date']}: opponent \"{opp}\" is a matchup title, "
+                        'not a single team')
+    elif ' & ' in opp:
+        failures.append(f"{g['date']}: opponent \"{opp}\" combines two teams; "
+                        'a multi-team day needs one row per KC game')
+
 # A duplicated game shows up as a wrong record and/or a whole lineup drifting.
 # The official aggregate lags the schedule listing by a day or more, so a
 # seed that leads it is normal right after a game. It is only corruption if

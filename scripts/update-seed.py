@@ -504,8 +504,50 @@ def season_for(date_str, opponent):
     return '2026'
 
 
+KC_ALIASES = ('KANSAS CITY DIAMONDS', 'KC DIAMONDS')
+# Multi-team exhibition days name the visiting schools in full.
+SCHOOLS = {
+    'UNIVERSITY OF NEBRASKA': 'Nebraska',
+    'UNIVERSITY OF KANSAS': 'KU',
+    'UNIVERSITY OF MISSOURI': 'Missouri',
+    'WICHITA STATE UNIVERSITY': 'Wichita State',
+    'KANSAS STATE UNIVERSITY': 'Kansas State',
+    'UNIVERSITY OF IOWA': 'Iowa',
+    'UNIVERSITY OF OKLAHOMA': 'Oklahoma',
+}
+
+
+def matchup_opponent(raw):
+    """KC's opponent for a block titled "<team> VS. <team>".
+
+    Returns None when the title is not a pairing (an ordinary single-opponent
+    block), or '' when it is a pairing KC is not part of.
+
+    The fall exhibitions put three games on one day and title each block with
+    the full pairing, e.g. "UNIVERSITY OF KANSAS VS. KANSAS CITY DIAMONDS".
+    Two of the three involve KC and one does not, so a block naming two other
+    schools must be skipped rather than recorded as a KC fixture.
+    """
+    sides = [s.strip() for s in re.split(r'\s+VS\.\s+', raw.upper()) if s.strip()]
+    if len(sides) != 2:
+        return None
+    kc = [s for s in sides if any(a in s for a in KC_ALIASES)]
+    if not kc:
+        return ''
+    other = [s for s in sides if s not in kc]
+    if len(other) != 1:
+        return ''
+    name = other[0]
+    return SCHOOLS.get(name, CANONICAL_OPP.get(name, smart_title(name)))
+
+
 def parse_schedule():
-    """-> {date: {'opponent':…, 'event':…, 'location':…}} from the site's pages."""
+    """-> {(date, opponent): {'event':…, 'location':…}} from the site's pages.
+
+    Keyed by opponent as well as date: a date can carry more than one KC game
+    (the Aug 8 doubleheader, and two of the three slots on each fall
+    exhibition day), and keying on date alone silently kept only one of them.
+    """
     out = {}
     for path in SCHEDULE_FILES:
         try:
@@ -542,8 +584,12 @@ def parse_schedule():
                 if len(fields) == 3:
                     break
             raw_opp = fields[0] if fields else ''
-            opponent = (CANONICAL_OPP.get(raw_opp.upper(), smart_title(raw_opp))
-                        if raw_opp.strip() else 'TBD')
+            paired = matchup_opponent(raw_opp)
+            if paired == '':
+                continue                 # a game between two other teams
+            opponent = paired or (
+                CANONICAL_OPP.get(raw_opp.upper(), smart_title(raw_opp))
+                if raw_opp.strip() else 'TBD')
             location = fields[1] if len(fields) > 1 else None
             if location and location.upper() == 'TBD':
                 location = None          # venue not announced yet
@@ -554,8 +600,8 @@ def parse_schedule():
             # site; the site never names the bracket, so label it ourselves.
             if not event and season_for(date, opponent) == '2026 Postseason':
                 event = 'PSL Championship'
-            prev = out.get(date, {})
-            out[date] = {
+            prev = out.get((date, opponent), {})
+            out[(date, opponent)] = {
                 'opponent': opponent,
                 'location': location or prev.get('location'),
                 'event': event or prev.get('event'),
@@ -575,19 +621,39 @@ def sync_schedule():
     scheduled = parse_schedule()
     if not scheduled:
         return changed
-    for date, info in sorted(scheduled.items()):
-        game = games_by_date.get(date)
+    for (date, opponent), info in sorted(scheduled.items()):
+        on_date = [g for g in seed['games'] if g['date'] == date]
+        game = next((g for g in on_date if g['opponent'] == opponent), None)
+        if game is None and is_tbd(opponent):
+            # A TBD entry carries no identity of its own, so it can only ever
+            # annotate a game already on that date - never introduce a second
+            # one. Adding on TBD duplicated dates whose real result had landed.
+            game = next((g for g in on_date if 'teamScore' not in g), None) \
+                or (on_date[0] if on_date else None)
         if game is None:
-            game = {'date': date, 'opponent': info['opponent'],
-                    'season': season_for(date, info['opponent'])}
+            # An earlier run recorded one row per date and, for a multi-team
+            # day, invented a combined opponent ("Nebraska & KU") that is not a
+            # team KC plays. Claim such a row for the first real matchup rather
+            # than leaving it beside the true fixtures. Only ever a row with no
+            # result of its own.
+            game = next((g for g in on_date
+                         if 'teamScore' not in g and 'lines' not in g
+                         and (' & ' in g['opponent'] or is_tbd(g['opponent']))), None)
+            if game is not None:
+                if game['opponent'] != opponent:
+                    print(f"schedule: {date} {game['opponent']} -> {opponent}")
+                game['opponent'] = opponent
+                changed = True
+        if game is None:
+            game = {'date': date, 'opponent': opponent,
+                    'season': season_for(date, opponent)}
             if info.get('event'):
                 game['event'] = info['event']
             if info.get('location'):
                 game['location'] = info['location']
             seed['games'].append(game)
-            games_by_date[date] = game
             changed = True
-            print(f"schedule: added {date} vs {game['opponent']} ({game['season']})")
+            print(f"schedule: added {date} vs {opponent} ({game['season']})")
         else:
             # Retract a sales pitch an earlier run mistook for an event name.
             if game.get('event') and EVENT_JUNK.search(game['event']):
@@ -603,10 +669,7 @@ def sync_schedule():
             if game.get('season') != want_season and 'lines' not in game:
                 game['season'] = want_season
                 changed = True
-            if game.get('opponent') in (None, 'TBD') and info['opponent'] != 'TBD':
-                game['opponent'] = info['opponent']
-                changed = True
-    seed['games'].sort(key=lambda g: g['date'])
+    seed['games'].sort(key=lambda g: (g['date'], g['opponent']))
     return changed
 
 
