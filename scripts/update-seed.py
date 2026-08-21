@@ -479,13 +479,22 @@ def ingest_box_scores():
 # touched, and a game is never removed (a scraped page that briefly drops a
 # game must not erase recorded history).
 SCHEDULE_FILES = ('scraped/schedule.txt', 'scraped/past-results.txt')
-NOISE = ('TICKETS', 'LIVE FEED', 'FCSN', 'PLUTOTV', 'BOX SCORE', 'VS.')
+NOISE = ('TICKETS', 'LIVE FEED', 'FCSN', 'PLUTOTV', 'BOX SCORE', 'VS.',
+         # Page section headers. A block whose optional promo line is absent
+         # runs straight into one of these, and without them a heading would
+         # be adopted as the game's event name.
+         'NEXT GAME', 'UPCOMING GAMES', 'PAST GAMES & RESULTS',
+         'UPCOMING SCHEDULE', 'WANT TO BE PART OF THE ACTION?')
 # Tokens the site writes in caps that must stay caps when a name is title-cased.
 KEEP_CAPS = {'KU', 'KC', 'TBD', 'NY', 'PSL', 'MU'}
 # Some blocks put a box-office sales pitch where the promo name usually goes.
 # That is not an event, so it must not land in the game's event field.
+# A multi-team exhibition day also puts the whole slate, and then the dugout
+# assignments, where a promo name usually goes. Neither is this game's event,
+# and both read as nonsense in the app's event line ("Nebraska 3rd Base Side").
 EVENT_JUNK = re.compile(
-    r'group ticket|call \d{3}[-.]|\bcall us\b|\btickets?\b.*\bavailable\b',
+    r'group ticket|call \d{3}[-.]|\bcall us\b|\btickets?\b.*\bavailable\b'
+    r'|\d{1,2}:\d{2}\s*-\s*.+\bvs\b|\b(1st|3rd) base side\b',
     re.I)
 
 
@@ -562,17 +571,20 @@ def parse_schedule():
             if not md:
                 continue
             date = f'{md.group(3)}-{MONTHS[md.group(1)]:02d}-{int(md.group(2)):02d}'
-            # Each block reads: <day> / <date time> / VS. / opponent /
-            # location / optional promo-event line, then ticket links.
-            try:
-                vs = next(k for k in range(i + 1, min(i + 6, len(lines)))
-                          if lines[k].upper() == 'VS.')
-            except StopIteration:
-                continue
+            # Each block reads: <day> / <date time> / [VS.] / matchup /
+            # location / optional promo line, then section headers or links.
+            #
+            # The standalone "VS." line is optional. The upcoming-games page
+            # dropped it on Aug 21 2026 - the matchup title carries "VS."
+            # inline instead - while the past-results page still emits it.
+            # Requiring it silently stopped every FUTURE game from syncing:
+            # the fall fixtures were already in the seed so nothing looked
+            # wrong, but a new date or a corrected opponent would never have
+            # reached the app. Tolerate the separator, never depend on it.
             fields = []
-            for k in range(vs + 1, min(vs + 9, len(lines))):
+            for k in range(i + 1, min(i + 12, len(lines))):
                 cur = lines[k]
-                if not cur:
+                if not cur or cur.upper() == 'VS.':
                     continue
                 if cur.upper() in NOISE or re.match(
                         r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$', cur):
