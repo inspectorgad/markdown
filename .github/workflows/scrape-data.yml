@@ -2,16 +2,32 @@ name: Scrape KC Diamonds data
 
 on:
   workflow_dispatch:
-  # Nightly at 09:00 UTC (4 AM Central) — after even late games are final.
-  # The 13:00 entry is a backstop, not a second collection: GitHub drops
-  # scheduled runs under load and says nothing when it does, and on 2026-08-27
-  # this cron and the KU volleyball one both simply never queued. A missed night
-  # is invisible to every check we have, because nothing ran to fail. A second
-  # attempt costs one no-op run: the scrape is idempotent, verify-seed still
-  # gates fail-closed, and the feed upload compares digests rather than assuming.
+  # Every six hours, on the :07. One nightly run at 09:00 with a 13:00 backstop
+  # had two problems, and this addresses both.
+  #
+  # Delivery. GitHub's scheduler is best-effort: it drops runs under load (this
+  # cron and the KU volleyball one both never queued on 2026-08-27) and it queues
+  # them late - through late August it ran five to eight hours behind. The top of
+  # the hour is the most congested minute there is, since it is what nearly every
+  # cron in the world asks for, so these now sit at :07. A dropped or slow entry
+  # costs six hours instead of a day.
+  #
+  # Coverage. Delivered punctually, 09:00 and 13:00 only look at the morning, so
+  # a Sunday afternoon game finishing at 20:00 UTC waited until the next day. The
+  # volleyball repo lost sixteen hours to exactly that on 2026-08-30.
+  #
+  # Four runs a day rather than volleyball's six because a run here takes about
+  # seventeen minutes, nearly all of it waiting on thekcdiamonds.com and
+  # BallClubz - it is their bandwidth as much as ours. Games are weekend
+  # tournaments, so six-hourly still puts a result in the app within a few hours
+  # of the final. The scrape is idempotent, verify-seed still gates the seed
+  # fail-closed, and the feed upload compares digests rather than assuming this
+  # run changed something.
   schedule:
-    - cron: '0 9 * * *'
-    - cron: '0 13 * * *'
+    - cron: '7 2 * * *'
+    - cron: '7 8 * * *'
+    - cron: '7 14 * * *'
+    - cron: '7 20 * * *'
   push:
     branches:
       - main
