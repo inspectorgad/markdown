@@ -56,6 +56,11 @@ async function collectStandings() {
     'https://www.professionalsoftballleague.com/league-standings',
     'https://www.professionalsoftballleague.com/stats',
     'https://www.professionalsoftballleague.com/statistics',
+    // A TEAMS page appeared in the league site's nav on 2026-09-08. There is
+    // still no table anywhere on the site - which is why the app's standings
+    // tab shows KC's own record by opponent instead - so watch the most likely
+    // place for one to turn up rather than finding out months later.
+    'https://www.professionalsoftballleague.com/teams',
     'https://www.professionalsoftballleague.com/',
     'https://thekcdiamonds.com/standings',
   ];
