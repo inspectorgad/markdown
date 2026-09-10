@@ -54,7 +54,28 @@ jobs:
         run: |
           npm init -y > /dev/null
           npm install playwright@1.49.0 > /dev/null
-          npx playwright install --with-deps chromium
+          # --with-deps runs apt-get, which pulls Google's Chrome apt index, and
+          # that index is occasionally served stale: on 2026-09-09 the 17:46 run
+          # died in 26 seconds on "Hash Sum mismatch" from dl.google.com. Their
+          # mirror, not ours, and it clears on its own - the next window was
+          # green - but a lost window is a lost collection, so retry a couple of
+          # times before giving up rather than waiting six hours for the next
+          # cron.
+          ok=0
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then ok=1; break; fi
+            echo "browser install failed (attempt $attempt); retrying"
+            sudo apt-get clean || true
+            sleep $((attempt * 20))
+          done
+          # Fail loudly rather than letting the scrape die later on a missing
+          # browser. Checking a flag, not re-running the install: --with-deps
+          # hits apt-get every time, so a belt-and-braces second call would
+          # double our exposure to the flake this loop exists to absorb.
+          if [ "$ok" != "1" ]; then
+            echo "::error::could not install Chromium after 3 attempts"
+            exit 1
+          fi
 
       - name: Scrape pages
         run: node scripts/scrape-kc-diamonds.mjs
