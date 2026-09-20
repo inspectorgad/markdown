@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KC Diamonds — 2026 Season Dashboard</title>
+<!-- Installable on a phone's home screen. The icons are built from the team's
+     own logo by scripts/make-web-icons.py, from the same source file the
+     Android launcher uses, so the two match. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111459">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Diamonds">
 <style>
 :root {
   color-scheme: light;
@@ -582,6 +591,13 @@ function openDetail(name) {
 function closeDetail() { document.getElementById('detail').style.display = 'none'; }
 
 load();
+
+// Registered after load() so the worker install never competes with the first
+// paint. Failing to register is not worth a message: the page works without it,
+// and only the offline launch is lost.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
