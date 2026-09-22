@@ -265,7 +265,13 @@ Sat 8/8
 L 7-8
 View Team Statistics
 Players
-#	POS	LAST NAME	FIRST NAME	BATS	THROWS
+#
+	POS
+	LAST NAME
+	FIRST NAME
+	BATS
+	THROWS
+
 33		Aldridge	Kylie	L	R
 26		Blampied	Riley	R	R
 8		Boggs	Leah	R	R
