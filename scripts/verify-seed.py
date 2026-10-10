@@ -207,6 +207,30 @@ if over and not systemic:
         f'{len(over)} player(s) drifted above official totals by a small margin; '
         'treating as an upstream scoring correction, not corruption')
 
+# Pitching has an internal cross-check the batting side never had: the runs
+# charged to KC's pitchers are the runs the opponent scored, and that score
+# comes from the schedule listing rather than from the box table. A mismatch
+# means the two halves disagree about what happened, which is corruption and
+# not a scoring lag - so it fails rather than warns.
+#
+# Innings are a second check: a seven-inning game cannot have a staff throwing
+# more than the outs it recorded, and a shortened one records fewer.
+for g in seed['games']:
+    if 'pitching' not in g or g.get('opponentScore') is None:
+        continue
+    charged = sum(p['r'] for p in g['pitching'])
+    if charged != g['opponentScore']:
+        failures.append(
+            f"{g['date']} vs {g['opponent']}: pitchers charged {charged} runs but "
+            f"the opponent scored {g['opponentScore']}")
+    outs = sum(p['outs'] for p in g['pitching'])
+    if outs > 3 * 12:
+        failures.append(
+            f"{g['date']} vs {g['opponent']}: {outs // 3}.{outs % 3} innings "
+            f"pitched is more than any plausible game")
+    if any(p['strikes'] > p['pitches'] for p in g['pitching'] if p['pitches']):
+        failures.append(f"{g['date']}: a pitcher threw more strikes than pitches")
+
 for w in warnings[:20]:
     print('WARN:', w)
 print(f'verify-seed: record seed {seed_w}-{seed_l} / official {off_w}-{off_l}, '
