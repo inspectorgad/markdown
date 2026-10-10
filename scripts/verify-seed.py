@@ -231,6 +231,42 @@ for g in seed['games']:
     if any(p['strikes'] > p['pitches'] for p in g['pitching'] if p['pitches']):
         failures.append(f"{g['date']}: a pitcher threw more strikes than pitches")
 
+# And the mirror, now that the opponent's half is stored: the runs their staff
+# was charged are the runs KC scored.
+#
+# Only the pitching relationships are checked, because only they actually hold.
+# Measured across the season: KC pitchers vs opponent score and opposing
+# pitchers vs KC score both reconcile 41/41, while KC batters vs KC score is
+# 39/41 and opposing batters vs their score 31/41. A pitcher is charged every
+# run that scores; the batting table credits the run to whoever was on base,
+# and this league's temporary runners often are not in that table at all. A
+# check that fires on correct data would be worse than no check.
+for g in seed['games']:
+    if 'opponentPitching' not in g or g.get('teamScore') is None:
+        continue
+    charged = sum(p['r'] for p in g['opponentPitching'])
+    if charged != g['teamScore']:
+        failures.append(
+            f"{g['date']} vs {g['opponent']}: opposing pitchers charged {charged} "
+            f"runs but KC scored {g['teamScore']}")
+    if any(p['strikes'] > p['pitches'] for p in g['opponentPitching'] if p['pitches']):
+        failures.append(
+            f"{g['date']}: an opposing pitcher threw more strikes than pitches")
+
+# Opposing players must never be filed as Diamonds. The roster is built from
+# KC's own box scores and has sat at 24 all season; parsing the other team's
+# half through the KC path would add ten or so names a game, so a roster that
+# suddenly grows is the signature of exactly that mistake.
+#
+# Deliberately not "no opponent row may name a roster player": three women
+# appear in both KC's roster and opposing line-ups this season (Marissa
+# Trivelpiece, Meg Houk, Sydra Seville). That is player movement upstream, not
+# a parsing error, and a check that forbade it would fire on correct data.
+if len(seed['players']) > 40:
+    failures.append(
+        f"roster has grown to {len(seed['players'])} players; opposing players "
+        'are likely being folded into it')
+
 for w in warnings[:20]:
     print('WARN:', w)
 print(f'verify-seed: record seed {seed_w}-{seed_l} / official {off_w}-{off_l}, '
