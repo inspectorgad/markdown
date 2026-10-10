@@ -192,6 +192,145 @@ def is_tbd(opp):
     return not opp or opp.strip().upper() == 'TBD'
 
 
+def ip_to_outs(text):
+    """'5.1' -> 16. Innings are whole innings plus thirds, not decimals.
+
+    Refuses a fractional part other than .0/.1/.2 instead of rounding it. If
+    the page ever switched to true decimals, 5.5 read as thirds would become
+    five and two-thirds and every ERA built on it would be wrong by a little -
+    the kind of error that survives review because it looks reasonable.
+    """
+    whole, _, third = text.partition('.')
+    if third not in ('0', '1', '2'):
+        raise ValueError(f'innings {text!r}: fractional part is not thirds')
+    return int(whole) * 3 + int(third)
+
+
+PITCHER_NAME = re.compile(r"^([A-Z][A-Z0-9 '.-]*)$")
+PITCHER_NUMS = re.compile(
+    r"^([A-Za-z][A-Za-z'.-]*)\t(\d+\.\d)\t(\d+)\t(\d+)\t(\d+)\t(\d+)\t(\d+)"
+    r"(?:\t(\d+)-(\d+))?\s*$")
+
+
+def parse_pitchers(text):
+    """Parse KC's pitching table -> ([rows], totals) or None.
+
+    Same shape as the batting table - surname on its own line, given name
+    leading the numbers - and the same refusal to invent data: a login-gated
+    table returns None rather than a staff that pitched nothing.
+
+    TOTALS is kept because it is a real checksum rather than a repeat of the
+    last row, which is what makes the thirds arithmetic verifiable: 1.1 + 0.2 +
+    3.1 + 0.2 lands on 6.0 only if the fractions are thirds.
+    """
+    if GATED_BOX.search(text):
+        return None
+    lines = text.split('\n')
+    try:
+        start = next(i for i, l in enumerate(lines) if l.startswith('Pitchers\t'))
+    except StopIteration:
+        return None
+    rows, totals = [], None
+    i = start + 1
+    while i < len(lines):
+        line = lines[i].rstrip()
+        if not line.strip():
+            i += 1
+            continue
+        if line.strip().startswith('TOTALS'):
+            cells = line.strip().split('\t')
+            if len(cells) >= 7:
+                ps = cells[7].split('-') if len(cells) > 7 and '-' in cells[7] else ['0', '0']
+                totals = {'outs': ip_to_outs(cells[1]), 'h': int(cells[2]),
+                          'r': int(cells[3]), 'er': int(cells[4]), 'bb': int(cells[5]),
+                          'so': int(cells[6]), 'pitches': int(ps[0]), 'strikes': int(ps[1])}
+            break
+        m = PITCHER_NAME.match(line.strip())
+        if m and i + 1 < len(lines):
+            d = PITCHER_NUMS.match(lines[i + 1].rstrip())
+            if d:
+                g = d.groups()
+                rows.append({'last': m.group(1).title(), 'first': g[0],
+                             'outs': ip_to_outs(g[1]), 'h': int(g[2]), 'r': int(g[3]),
+                             'er': int(g[4]), 'bb': int(g[5]), 'so': int(g[6]),
+                             'pitches': int(g[7]) if g[7] else 0,
+                             'strikes': int(g[8]) if g[8] else 0})
+                i += 2
+                continue
+        i += 1
+    return (rows, totals) if rows else None
+
+
+def pitching_lines(box_text, wrap):
+    """The seed's `pitching` rows for one game, or [] if the table is unusable.
+
+    Innings are stored as outs, not as "5.1". A string that reads like a
+    decimal but is not invites exactly one arithmetic mistake, and the app can
+    format outs back for display without ever having to know that.
+    """
+    got = parse_pitchers(box_text)
+    if not got:
+        return []
+    rows, totals = got
+    # The published totals are a free check on the parse; a mismatch means the
+    # rows were not read correctly, and a wrong pitching line is worse than none.
+    if totals:
+        for field in ('outs', 'h', 'r', 'er', 'bb', 'so'):
+            if sum(r[field] for r in rows) != totals[field]:
+                print(f'!! pitching: {field} does not match the published TOTALS, '
+                      f'skipping this game', file=sys.stderr)
+                return []
+    # "Win: Valdespino", "Win: Henley - Loss: Deal", and with a save appended.
+    # Split the line into its fields rather than matching the whole shape: a
+    # Loss group that runs to end of line swallows " - Save: ..." with it, and
+    # then the losing pitcher matches nobody - which silently cost the decision
+    # on exactly the games that had a save.
+    #
+    # Take the first token of each name. One line reads "Save: Camenzind H",
+    # and a surname that does not match is a missing decision rather than a
+    # wrong one, which is the right way round.
+    dec = {}
+    line = re.search(r'^Win:[^\n]*$', wrap or '', re.M)
+    if line:
+        for part in re.split(r'\s+-\s+', line.group(0)):
+            m = re.match(r'(Win|Loss|Save):\s*(\S+)', part)
+            if m:
+                dec[m.group(2).upper()] = {'Win': 'W', 'Loss': 'L', 'Save': 'S'}[m.group(1)]
+
+    out = []
+    for r in rows:
+        name = resolve_player(r['first'], r['last'])
+        row = {'player': name, 'outs': r['outs'], 'h': r['h'], 'r': r['r'],
+               'er': r['er'], 'bb': r['bb'], 'so': r['so'],
+               'pitches': r['pitches'], 'strikes': r['strikes']}
+        # The decision line gives a surname only, and it may name the other
+        # team's pitcher - only claim it for someone in this game's table.
+        if r['last'].upper() in dec:
+            row['dec'] = dec[r['last'].upper()]
+        out.append(row)
+    return out
+
+
+def resolve_player(first, last):
+    """Fold a box-score pitcher onto the roster name, adding her if new."""
+    global changed
+    candidate = f'{first.title()} {last.title()}'
+    match = next((n for n in known_names if n.lower() == candidate.lower()), None)
+    if not match:
+        match = next((n for n in known_names
+                      if n.upper().endswith(last.upper())
+                      and n.split()[0].lower() == first.lower()), None)
+    if not match:
+        match = last_to_name.get(last.upper())
+    if not match:
+        seed['players'].append(
+            {'name': candidate, 'jerseyNumber': '', 'position': 'P'})
+        known_names.add(candidate)
+        changed = True
+        match = candidate
+    return match
+
+
 def ballclubz_results():
     """[(date, opponent, us, them)] from BallClubz's own schedule listing.
 
@@ -269,10 +408,14 @@ today = datetime.date.today().isoformat()
 # data this pipeline owns (srcId set) and whose snapshot still parses are
 # touched; numbers are never rewritten, lines are only removed.
 snapshot_by_id = {}
+wrap_by_id = {}
 for f in glob.glob('scraped/box-*.json'):
     d = json.load(open(f))
     gid_ = d.get('id') or d['url'].rsplit('/', 1)[1]
     snapshot_by_id[gid_] = d.get('boxKC', '') or ''
+    # The decision line ("Win: Valdespino - Loss: Pease") lives in the wrap,
+    # not in the box table, so a pitching re-derive needs both halves.
+    wrap_by_id[gid_] = d.get('wrap', '') or ''
 
 for g in seed['games']:
     gid_ = g.get('srcId')
@@ -310,6 +453,37 @@ for g in seed['games']:
             print(f're-derived {g["date"]}: added {nm}')
         g['lines'] = rebuilt
         changed = True
+
+# The same re-derive for pitching, under the same rule: a snapshot may correct
+# a game but never gut it. Innings are the canary here that at-bats are for
+# batting - a staff cannot un-pitch an inning it has already thrown.
+for g in seed['games']:
+    gid_ = g.get('srcId')
+    if not gid_ or 'pitching' not in g:
+        continue
+    box = snapshot_by_id.get(gid_, '')
+    if 'Pitchers\t' not in box:
+        continue
+    rebuilt = pitching_lines(box, wrap_by_id.get(gid_, ''))
+    if not rebuilt:
+        continue
+    old_outs = sum(p['outs'] for p in g['pitching'])
+    new_outs = sum(p['outs'] for p in rebuilt)
+    if old_outs and new_outs * 2 < old_outs:
+        print(f'!! {g["date"]}: refusing pitching re-derive, innings would drop '
+              f'{old_outs // 3}.{old_outs % 3} -> {new_outs // 3}.{new_outs % 3} '
+              f'(snapshot looks unparsed)', file=sys.stderr)
+        continue
+    if rebuilt != g['pitching']:
+        before = {p['player'] for p in g['pitching']}
+        after = {p['player'] for p in rebuilt}
+        for nm in sorted(before - after):
+            print(f're-derived {g["date"]}: dropped pitcher {nm}')
+        for nm in sorted(after - before):
+            print(f're-derived {g["date"]}: added pitcher {nm}')
+        g['pitching'] = rebuilt
+        changed = True
+
 
 def schedule_scores():
     """{date: [(opponent, us, them), ...]} - every game the schedule reports.
@@ -468,6 +642,11 @@ def ingest_box_scores():
                 if out:
                     game['lines'] = out
                     changed = True
+        if 'pitching' not in game:
+            pitched = pitching_lines(d.get('boxKC', '') or '', wrap)
+            if pitched:
+                game['pitching'] = pitched
+                changed = True
     return changed
 
 
