@@ -206,10 +206,17 @@ def ip_to_outs(text):
     return int(whole) * 3 + int(third)
 
 
-PITCHER_NAME = re.compile(r"^([A-Z][A-Z0-9 '.-]*)$")
+PITCHER_NAME = re.compile(r"^([A-Z][A-Z0-9 '.’-]*)$")
+# The given name allows digits because BallClubz writes "Player4" when the
+# scorer had no name for her, and it is optional because some rows carry no
+# name at all - just a leading tab and the numbers. Both appear in opposing
+# staffs. Dropping those rows silently would be the worst outcome: the innings
+# are real, so the remaining rows would no longer sum to the published TOTALS
+# and the checksum would throw away the whole game's pitching.
 PITCHER_NUMS = re.compile(
-    r"^([A-Za-z][A-Za-z'.-]*)\t(\d+\.\d)\t(\d+)\t(\d+)\t(\d+)\t(\d+)\t(\d+)"
+    r"^([A-Za-z][A-Za-z0-9'.’-]*)?\t(\d+\.\d)\t(\d+)\t(\d+)\t(\d+)\t(\d+)\t(\d+)"
     r"(?:\t(\d+)-(\d+))?\s*$")
+PLACEHOLDER_NAME = re.compile(r'^Player\d+$', re.I)
 
 
 def parse_pitchers(text):
@@ -245,24 +252,130 @@ def parse_pitchers(text):
                           'r': int(cells[3]), 'er': int(cells[4]), 'bb': int(cells[5]),
                           'so': int(cells[6]), 'pitches': int(ps[0]), 'strikes': int(ps[1])}
             break
+        def row_from(groups, last):
+            return {'last': last, 'first': groups[0] or '',
+                    'outs': ip_to_outs(groups[1]), 'h': int(groups[2]),
+                    'r': int(groups[3]), 'er': int(groups[4]), 'bb': int(groups[5]),
+                    'so': int(groups[6]),
+                    'pitches': int(groups[7]) if groups[7] else 0,
+                    'strikes': int(groups[8]) if groups[8] else 0}
+
         m = PITCHER_NAME.match(line.strip())
         if m and i + 1 < len(lines):
             d = PITCHER_NUMS.match(lines[i + 1].rstrip())
             if d:
-                g = d.groups()
-                rows.append({'last': m.group(1).title(), 'first': g[0],
-                             'outs': ip_to_outs(g[1]), 'h': int(g[2]), 'r': int(g[3]),
-                             'er': int(g[4]), 'bb': int(g[5]), 'so': int(g[6]),
-                             'pitches': int(g[7]) if g[7] else 0,
-                             'strikes': int(g[8]) if g[8] else 0})
+                rows.append(row_from(d.groups(), m.group(1).title()))
                 i += 2
                 continue
+        # A numbers row with no surname above it: the name was never published.
+        d = PITCHER_NUMS.match(line)
+        if d and not d.group(1):
+            rows.append(row_from(d.groups(), ''))
         i += 1
     return (rows, totals) if rows else None
 
 
-def pitching_lines(box_text, wrap):
+def parse_box_other(text):
+    """Parse the OPPONENT's batting table -> [{player, ab, r, ...}].
+
+    Deliberately not parse_box_kc. That one resolves every row against the
+    Diamonds roster and appends anyone it cannot place, which is right for KC
+    and catastrophic here: running the other team through it would file forty
+    opposing players as Diamonds. Nothing in this function touches
+    seed['players'], and names are kept exactly as the box prints them.
+
+    Extras ("2B: Dayton Abby, Coor Jordan") are matched by surname within this
+    one game only, for the same reason.
+    """
+    if GATED_BOX.search(text):
+        return []
+    lines = text.split('\n')
+    try:
+        start = next(i for i, l in enumerate(lines) if l.startswith('Batters\t'))
+    except StopIteration:
+        return []
+    stats, order, by_last = {}, [], {}
+    i = start + 1
+    while i < len(lines) - 1:
+        row = lines[i]
+        if row.strip().startswith('TOTALS'):
+            break
+        m = re.match(r"^\s*[0-9F]*\s*\t?([A-Z][A-Z0-9 '.’-]+) #(\d+)$", row.strip())
+        if m:
+            detail = lines[i + 1] if i + 1 < len(lines) else ''
+            cells = detail.split('\t')
+            first = cells[0].strip().split()[0] if cells and cells[0].strip() else ''
+            nums = cells[1:]
+            if first and len(nums) >= 7:
+                last = m.group(1).strip()
+                name = f'{first.title()} {last.title()}'
+                vals = [int(x) if x.strip().isdigit() else 0 for x in nums[:7]]
+                c = dict(zip(['pa', 'ab', 'r', 'h', 'rbi', 'bb', 'so'], vals))
+                c.update({'2b': 0, '3b': 0, 'hr': 0, 'sb': 0, 'hbp': 0, 'sf': 0})
+                stats[name] = c
+                by_last[last.upper()] = name
+                order.append(name)
+            i += 2
+            continue
+        i += 1
+
+    tail = text[text.find('Batters\t'):]
+    pit = tail.find('Pitchers\t')
+    tail = tail[:pit] if pit != -1 else tail
+    for key, field in {'2B': '2b', '3B': '3b', 'HR': 'hr', 'SB': 'sb',
+                       'HBP': 'hbp', 'SF': 'sf'}.items():
+        m = re.search(rf'^{key}: (.+)$', tail, re.M)
+        if not m:
+            continue
+        for part in m.group(1).split(','):
+            part = part.strip()
+            cnt = 1
+            n = re.search(r'\((\d+)\)', part)
+            if n:
+                cnt, part = int(n.group(1)), part[:n.start()].strip()
+            name = by_last.get(part.split()[0].upper()) if part else None
+            if name:
+                stats[name][field] += cnt
+
+    out = []
+    for name in order:
+        c = stats[name]
+        if c['pa'] == 0 and c['ab'] == 0 and c['r'] == 0:
+            continue
+        out.append({'player': name, 'ab': c['ab'], 'r': c['r'], 'h': c['h'],
+                    '2b': c['2b'], '3b': c['3b'], 'hr': c['hr'], 'rbi': c['rbi'],
+                    'bb': c['bb'], 'so': c['so'], 'hbp': c['hbp'], 'sf': c['sf'],
+                    'sb': c['sb']})
+    return out
+
+
+def opponent_half(box):
+    """The opponent's box text for a capture, or '' when it is not trustworthy.
+
+    The scraper drops a boxAway that duplicates KC's own half, but a capture
+    predating that fix may still hold one, and reading it as the opposition
+    would file KC's own numbers under the other team. Checked here too: the
+    cost of being wrong is silent and the check is a string comparison.
+    """
+    kc, away = box.get('boxKC') or '', box.get('boxAway') or ''
+    if not away or away == kc or 'Batters\t' not in away:
+        return ''
+    # A second guard on identity rather than on bytes: if most of the names in
+    # this table are on KC's roster, it is KC's table however it got here.
+    names = re.findall(r"^\s*[0-9F]*\s*\t?([A-Z][A-Z0-9 '.’-]+) #\d+$",
+                       away[away.find('Batters\t'):], re.M)
+    if names:
+        ours = sum(1 for n in names if n.strip().upper() in last_to_name)
+        if ours * 2 > len(names):
+            return ''
+    return away
+
+
+def pitching_lines(box_text, wrap, fold=True):
     """The seed's `pitching` rows for one game, or [] if the table is unusable.
+
+    fold=False keeps names as the box prints them, for the opposing staff:
+    folding them onto the Diamonds roster would invent Diamonds pitchers.
 
     Innings are stored as outs, not as "5.1". A string that reads like a
     decimal but is not invites exactly one arithmetic mistake, and the app can
@@ -299,7 +412,16 @@ def pitching_lines(box_text, wrap):
 
     out = []
     for r in rows:
-        name = resolve_player(r['first'], r['last'])
+        # "Player4" is the scorer's placeholder, not a given name, so a row
+        # carrying one is filed under the surname alone rather than as a
+        # person called Player4. A row with neither keeps an empty name: the
+        # innings are real and belong in the team's totals even when whoever
+        # threw them was never recorded.
+        first = '' if PLACEHOLDER_NAME.match(r['first'] or '') else r['first']
+        if fold and first and r['last']:
+            name = resolve_player(first, r['last'])
+        else:
+            name = ' '.join(p for p in (first.title(), r['last'].title()) if p)
         row = {'player': name, 'outs': r['outs'], 'h': r['h'], 'r': r['r'],
                'er': r['er'], 'bb': r['bb'], 'so': r['so'],
                'pitches': r['pitches'], 'strikes': r['strikes']}
@@ -409,6 +531,7 @@ today = datetime.date.today().isoformat()
 # touched; numbers are never rewritten, lines are only removed.
 snapshot_by_id = {}
 wrap_by_id = {}
+away_by_id = {}
 for f in glob.glob('scraped/box-*.json'):
     d = json.load(open(f))
     gid_ = d.get('id') or d['url'].rsplit('/', 1)[1]
@@ -416,6 +539,7 @@ for f in glob.glob('scraped/box-*.json'):
     # The decision line ("Win: Valdespino - Loss: Pease") lives in the wrap,
     # not in the box table, so a pitching re-derive needs both halves.
     wrap_by_id[gid_] = d.get('wrap', '') or ''
+    away_by_id[gid_] = opponent_half(d)
 
 for g in seed['games']:
     gid_ = g.get('srcId')
@@ -483,6 +607,32 @@ for g in seed['games']:
             print(f're-derived {g["date"]}: added pitcher {nm}')
         g['pitching'] = rebuilt
         changed = True
+
+# The opponent's half, under the same never-gut rule. Kept separate from the
+# loops above because its snapshot is a different field and may be absent for
+# a game whose KC half is perfectly good.
+for g in seed['games']:
+    gid_ = g.get('srcId')
+    if not gid_:
+        continue
+    away = away_by_id.get(gid_, '')
+    if not away:
+        continue
+    if 'opponentLines' in g:
+        rebuilt = parse_box_other(away)
+        old_ab = sum(l['ab'] for l in g['opponentLines'])
+        new_ab = sum(l['ab'] for l in rebuilt)
+        if rebuilt and not (old_ab and new_ab * 2 < old_ab) and rebuilt != g['opponentLines']:
+            g['opponentLines'] = rebuilt
+            changed = True
+    if 'opponentPitching' in g:
+        rebuilt = pitching_lines(away, wrap_by_id.get(gid_, ''), fold=False)
+        old_outs = sum(p['outs'] for p in g['opponentPitching'])
+        new_outs = sum(p['outs'] for p in rebuilt)
+        if rebuilt and not (old_outs and new_outs * 2 < old_outs) \
+                and rebuilt != g['opponentPitching']:
+            g['opponentPitching'] = rebuilt
+            changed = True
 
 
 def schedule_scores():
@@ -646,6 +796,17 @@ def ingest_box_scores():
             pitched = pitching_lines(d.get('boxKC', '') or '', wrap)
             if pitched:
                 game['pitching'] = pitched
+                changed = True
+        away = opponent_half(d)
+        if away and 'opponentLines' not in game:
+            batted = parse_box_other(away)
+            if batted:
+                game['opponentLines'] = batted
+                changed = True
+        if away and 'opponentPitching' not in game:
+            pitched = pitching_lines(away, wrap, fold=False)
+            if pitched:
+                game['opponentPitching'] = pitched
                 changed = True
     return changed
 
