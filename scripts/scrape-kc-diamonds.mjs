@@ -221,6 +221,21 @@ for (const id of ids) {
     const neverScored = /not available/.test(wrap);
     let lastErr = '';
     if (!neverScored) {
+      // The opponent's label as the line score spells it, e.g. "Atlanta Smok"
+      // (the column is narrow and the name is truncated to fit, and not the
+      // way the seed spells it - "New York Ris" for NY Rise). The team toggles
+      // carry these same strings, so this is what to click.
+      //
+      // The name ends at the first tab. A looser match runs past the "X" that
+      // marks a side not batting in the last inning and returns the whole row,
+      // tabs and all, which then matches no element on the page - losing the
+      // opponent for precisely the games a team did not bat last.
+      const oppLabel = (wrap.split('\n')
+        .map((l) => l.match(/^([A-Za-z][^\t]*?)\t[\dX\t]+$/))
+        .filter(Boolean)
+        .map((m) => m[1].trim())
+        .find((t) => t !== 'KC Diamonds')) || '';
+
       // BallClubz renamed this tab from "BOX" to "STATS" in early Aug 2026,
       // which silently emptied every box capture until it was noticed. Try the
       // known labels in turn and keep whichever yields a batting table, so a
@@ -231,16 +246,35 @@ for (const id of ids) {
           if (!(await tab.count())) continue;
           await tab.click({ timeout: 20_000 });
           await page.waitForTimeout(5_000);
-          const away = await textOf(page);
-          // The box view has a team toggle; click the KC Diamonds side.
-          await page.evaluate(() => {
-            const els = Array.from(document.querySelectorAll('*')).filter(
-              (e) => e.children.length === 0 && e.textContent.trim() === 'KC Diamonds'
-            );
-            if (els.length) els[els.length - 1].click();
-          });
+          // Click a team's own toggle rather than trusting whichever side the
+          // box happens to open on. It opens on the AWAY team, so for a road
+          // game that default is already KC: clicking "KC Diamonds" changed
+          // nothing and both halves were saved as KC's. That is why the
+          // opponent's box is missing from exactly the 16 away games and
+          // present for the 21 at Legends Field.
+          const clickTeam = (want) =>
+            page.evaluate((team) => {
+              const els = Array.from(document.querySelectorAll('*')).filter(
+                (e) => e.children.length === 0 && e.textContent.trim() === team
+              );
+              if (!els.length) return false;
+              els[els.length - 1].click();
+              return true;
+            }, want);
+
+          let away = '';
+          if (oppLabel && (await clickTeam(oppLabel))) {
+            await page.waitForTimeout(5_000);
+            away = await textOf(page);
+          }
+          await clickTeam('KC Diamonds');
           await page.waitForTimeout(5_000);
           const kc = await textOf(page);
+          // Two identical halves mean the toggle did not take. Storing that
+          // copy as the opponent would credit KC's own batting and pitching
+          // lines to whoever they were playing, so drop it and record nothing
+          // rather than something false.
+          if (away === kc || !away.includes('Batters\t')) away = '';
           if (kc.includes('Batters\t')) {
             boxAway = away;
             boxKC = kc;
