@@ -158,3 +158,12 @@ jobs:
           else
             echo "feed already matches the seed ($LOCAL)"
           fi
+          # Last, because a thin capture does not make the seed wrong: the merge
+          # gap-fills, so the numbers already shipped above are still the best
+          # we have. The run fails anyway - a capture that reaches fewer games
+          # than the seed already knows about is a collection failure even when
+          # nothing downstream notices, and it is only visible if it alerts.
+          if [ -f scraped/CAPTURE-SHORTFALL.txt ]; then
+            echo "::error::capture shortfall: $(cat scraped/CAPTURE-SHORTFALL.txt)"
+            exit 1
+          fi

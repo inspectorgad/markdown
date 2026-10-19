@@ -14,6 +14,29 @@ const KNOWN_IDS = [
   '2b513d8', '2b51461', '2b514ea', '2b51573', '2b7aa5e',
 ];
 
+// Every game already folded into the seed, as a floor under id discovery.
+// On 18 Oct the listing pages briefly served a short schedule and one run
+// captured 33 games instead of 44 - silently, because nothing compares this
+// run's harvest against the last one. KNOWN_IDS pins only the first ten, so
+// it caught none of it. The seed is the record of what we have successfully
+// ingested, it is not wiped with scraped/, and a game that has landed in it
+// does not stop existing; re-fetching it costs one page load. Reading it
+// here means a shrunken listing can no longer shrink the capture.
+const SEED = 'app/src/main/assets/seed.json';
+let priorIds = [];
+let priorBox = 0;
+try {
+  const seed = JSON.parse(fs.readFileSync(SEED, 'utf8'));
+  priorIds = seed.games.filter((g) => g.srcId).map((g) => g.srcId);
+  priorBox = seed.games.filter((g) => g.srcId && (g.lines || []).length).length;
+  console.log(`Seed floor: ${priorIds.length} known game ids, ${priorBox} with batting lines`);
+} catch (e) {
+  // A first run on a clean tree has no seed. Carry on without a floor rather
+  // than failing the collection - but say so, because on any later run a
+  // missing seed is itself the thing worth looking at.
+  console.log(`::warning::no seed to floor id discovery against: ${e.message}`);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
   userAgent:
@@ -166,6 +189,7 @@ await gamesPage.close();
 
 // --- 2. BallClubz team pages: discover every game link the platform lists.
 const discovered = new Set(KNOWN_IDS);
+const live = new Set();
 for (const url of [
   'https://www.ballclubz.com/kcdiamonds',
   'https://www.ballclubz.com/kcdiamonds/schedule',
@@ -187,7 +211,10 @@ for (const url of [
     );
     for (const h of links) {
       const m = h.match(/ballclubz\.com\/kcdiamonds\/(?:live|game|boxscore)\/([a-z0-9]+)/i);
-      if (m) discovered.add(m[1]);
+      if (m) {
+        discovered.add(m[1]);
+        live.add(m[1]);
+      }
     }
   } catch (e) {
     console.log(`${url}: ERROR ${e.message}`);
@@ -197,9 +224,22 @@ for (const url of [
 }
 for (const g of gameBlocks) {
   const m = g.href.match(/\/(?:live|game|boxscore)\/([a-z0-9]+)/i);
-  if (m) discovered.add(m[1]);
+  if (m) {
+    discovered.add(m[1]);
+    live.add(m[1]);
+  }
 }
+for (const id of priorIds) discovered.add(id);
 const ids = [...discovered].sort();
+// Name what this run's own listing failed to offer. Not an error on its own:
+// the ids are fetched anyway, and upstream is entitled to page or reorder its
+// schedule. It is the trail to follow if a capture ever does come back thin.
+const unlisted = priorIds.filter((id) => !live.has(id));
+if (unlisted.length) {
+  console.log(`::warning::this run's listing pages offered ${live.size} ids and ` +
+    `missed ${unlisted.length} the seed already holds (${unlisted.join(', ')}) - ` +
+    'fetching them from the seed floor');
+}
 console.log(`Game ids to fetch (${ids.length}):`, ids.join(', '));
 
 // --- 3. Every game: line score (WRAP), opponent box, and KC Diamonds box.
@@ -338,6 +378,26 @@ if (ids.length > 3 && boxOk === 0) {
   console.log('::error::could not reach the box-score tab for ANY game - the ' +
     'selector is probably broken upstream (it was renamed BOX -> STATS once)');
   process.exit(1);
+}
+// The guard above only fires when NO game yields a table; it has no notion of
+// "fewer than last time". Losing eleven games out of forty-four looked exactly
+// like a healthy run. The seed is gap-filling, so a thin capture never shrinks
+// the published numbers - which is precisely why this needs saying out loud,
+// or a capture could quietly waste away behind a seed that still looks right.
+// Counting gated boxes as reached: whether the numbers are public is upstream's
+// call, reaching the game at all is ours.
+const reached = boxOk + gated;
+if (priorBox && reached < priorBox) {
+  // Recorded rather than thrown: exiting here would fail the job at this step
+  // and discard the capture, which is the evidence needed to tell a one-run
+  // upstream blip from a broken selector. The commit step reads this file and
+  // fails the run once the capture is safely pushed - the same order the seed
+  // verification uses.
+  const note = `reached ${reached} of ${priorBox} games that already have ` +
+    `batting lines in the seed (box scores ok: ${boxOk}, login-gated: ${gated}, ` +
+    `ids fetched: ${ids.length})`;
+  fs.writeFileSync('scraped/CAPTURE-SHORTFALL.txt', `${note}\n`);
+  console.log(`::error::capture shortfall: ${note}`);
 }
 if (gated && gated === boxOk) {
   console.log('::warning::every box score is login-gated - per-player batting ' +
