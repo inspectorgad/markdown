@@ -17,3 +17,7 @@ local.properties
 .env
 debug.keystore
 __pycache__/
+
+# Previous scrape capture, held during a run so a failed page load cannot
+# overwrite good evidence. Deleted when the scrape finishes.
+/.scrape-prev/

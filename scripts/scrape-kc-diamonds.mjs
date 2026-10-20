@@ -5,8 +5,38 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 
-fs.rmSync('scraped', { recursive: true, force: true });
+// Keep the last capture to one side rather than deleting it outright. A game
+// page that fails to load used to have an error stub written over its box
+// file and its screenshot dropped, so one bad minute upstream replaced good
+// evidence with nothing: on 20 Oct five games came back
+// ERR_TOO_MANY_REDIRECTS and five real captures became {id, url, error}. The
+// seed survived on gap-filling, which is exactly what made it invisible.
+// Nothing that failed to load should overwrite something that did.
+const PREV = '.scrape-prev';
+fs.rmSync(PREV, { recursive: true, force: true });
+if (fs.existsSync('scraped')) fs.renameSync('scraped', PREV);
 fs.mkdirSync('scraped', { recursive: true });
+
+/** Carry a previous capture forward when this run could not fetch it. */
+function keepPrevious(name) {
+  const src = `${PREV}/${name}.json`;
+  if (!fs.existsSync(src)) return false;
+  let prev;
+  try {
+    prev = JSON.parse(fs.readFileSync(src, 'utf8'));
+  } catch {
+    return false;
+  }
+  // Only carry forward a real capture. A previous run's error stub has no
+  // wrap, and copying that over and over would quietly make an outage look
+  // like a steady state.
+  if (!prev || typeof prev.wrap !== 'string' || !prev.wrap) return false;
+  fs.copyFileSync(src, `scraped/${name}.json`);
+  if (fs.existsSync(`${PREV}/${name}.png`)) {
+    fs.copyFileSync(`${PREV}/${name}.png`, `scraped/${name}.png`);
+  }
+  return true;
+}
 
 // Game IDs confirmed from previous scrape rounds (hex-sorted = chronological).
 const KNOWN_IDS = [
@@ -251,7 +281,23 @@ for (const id of ids) {
   const name = `box-${String(i++).padStart(2, '0')}-${id}`;
   const page = await context.newPage();
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    // One retry on a failed navigation. The errors seen so far have been
+    // transient - a redirect loop that cleared by the next run - and the rest
+    // of this pipeline already retries the browser install and the push the
+    // same way. It is not a cure: the cause is upstream and unconfirmed, so
+    // the point of the retry is only to not lose a game to one bad moment.
+    let navErr = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+        navErr = null;
+        break;
+      } catch (e) {
+        navErr = e;
+        if (attempt < 2) await page.waitForTimeout(5_000);
+      }
+    }
+    if (navErr) throw navErr;
     await page.waitForTimeout(8_000);
     const wrap = await textOf(page);
     let boxAway = '';
@@ -341,8 +387,15 @@ for (const id of ids) {
     await page.screenshot({ path: `scraped/${name}.png`, fullPage: true });
     console.log(`${name}: wrap=${wrap.length} away=${boxAway.length} kc=${boxKC.length}`);
   } catch (e) {
-    fs.writeFileSync(`scraped/${name}.json`, JSON.stringify({ id, url, error: e.message }));
-    console.log(`${name}: ERROR ${e.message}`);
+    // Deliberately not counted as reached: the previous capture keeps the
+    // evidence, but this run did fail to collect the game, and the shortfall
+    // guard below is what says so out loud.
+    const kept = keepPrevious(name);
+    if (!kept) {
+      fs.writeFileSync(`scraped/${name}.json`, JSON.stringify({ id, url, error: e.message }));
+    }
+    console.log(`${name}: ERROR ${e.message.split('\n')[0]}` +
+      (kept ? ' - kept the previous capture' : ''));
   } finally {
     await page.close();
   }
@@ -358,12 +411,19 @@ try {
   await statsPage.waitForTimeout(7_000);
   fs.writeFileSync('scraped/ballclubz-stats.txt', await textOf(statsPage));
 } catch (e) {
+  // Deliberately NOT carried forward from the previous run, unlike the box
+  // captures. This snapshot is what verify-seed cross-checks the seed
+  // against, and checking today's seed against a stale copy of the official
+  // aggregates would be worse than not checking at all. A stub makes
+  // verify-seed log "stats snapshot incomplete; skipping", which is the
+  // fail-safe answer.
   fs.writeFileSync('scraped/ballclubz-stats.txt', `ERROR: ${e.message}`);
 } finally {
   await statsPage.close();
 }
 
 await browser.close();
+fs.rmSync(PREV, { recursive: true, force: true });
 console.log('Done. Files:', fs.readdirSync('scraped').join(', '));
 
 // A tab rename upstream emptied every batting table for days without anything
