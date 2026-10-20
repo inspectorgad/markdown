@@ -23,11 +23,24 @@ on:
   # of the final. The scrape is idempotent, verify-seed still gates the seed
   # fail-closed, and the feed upload compares digests rather than assuming this
   # run changed something.
+  # OFF-SEASON, from 20 Oct 2026. The last game played was 8 Aug; the four fall
+  # college exhibitions came and went without BallClubz publishing anything, and
+  # there is no more softball until next summer. Six-hourly collection exists to
+  # put a weekend result in the app the same evening, and there are no results
+  # to put there, so it is 120 runs a month of someone else's bandwidth for
+  # nothing.
+  #
+  # Weekly rather than switched off, because the pipeline is not only a
+  # collector. The official aggregate page is still behind the box scores it was
+  # built from (26-13 against our 27-14, plus a dozen over-counts), and if
+  # upstream reconciles that over the winter a weekly run notices and the
+  # warnings shrink. It also keeps the scrape exercised: a selector that rots in
+  # January is much better found in January than on opening weekend.
+  #
+  # To restore in-season collection, put the four daily crons back - nothing
+  # else here is seasonal.
   schedule:
-    - cron: '7 2 * * *'
-    - cron: '7 8 * * *'
-    - cron: '7 14 * * *'
-    - cron: '7 20 * * *'
+    - cron: '7 14 * * 1'
   push:
     branches:
       - main
