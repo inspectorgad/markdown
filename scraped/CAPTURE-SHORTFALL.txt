@@ -1,0 +1,1 @@
+reached 36 of 41 games that already have batting lines in the seed (box scores ok: 36, login-gated: 0, ids fetched: 44)
