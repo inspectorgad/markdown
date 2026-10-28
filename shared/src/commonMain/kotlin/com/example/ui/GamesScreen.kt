@@ -38,17 +38,7 @@ import com.example.data.Game
 import com.example.data.Player
 import com.example.data.StatLine
 import com.example.stats.summarize
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-
-/**
- * Today's date as yyyy-MM-dd in the phone's own time zone, which is what
- * SimpleDateFormat("yyyy-MM-dd") gave on Android. Game dates are stored in
- * that shape so they compare as text.
- */
-private fun today(): String =
-    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+import com.example.text.todayIso
 
 @Composable
 fun GamesScreen(
@@ -162,7 +152,7 @@ private fun ScoreText(game: Game) {
     if (us == null || them == null) {
         // ISO dates compare lexicographically, so a plain string compare tells us
         // whether this game has been played yet.
-        val upcoming = game.date > today()
+        val upcoming = game.date > todayIso()
         Text(
             if (upcoming) "Upcoming" else "No score",
             style = MaterialTheme.typography.labelSmall,
