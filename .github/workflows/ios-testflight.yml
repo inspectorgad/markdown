@@ -1,0 +1,162 @@
+name: iOS TestFlight build
+
+# Builds the iPhone app on one of GitHub's Macs and sends it to TestFlight,
+# from where it installs on the phone. Runs by hand, or when the iPhone app
+# changes on a branch.
+#
+# Signing happens at upload, not at build: the archive is built unsigned and
+# `xcodebuild -exportArchive`, given the App Store Connect key, signs it with
+# a distribution certificate Apple keeps for the team ("cloud signing"). That
+# needs no certificate stored in this repository and no registered device,
+# which a new developer account does not have. Xcode 26 is required: App Store
+# Connect has refused builds from older Xcodes since 28 April 2026.
+#
+# The app's screens and logic are the shared Kotlin code in shared/, which
+# Xcode builds into Shared.framework through Gradle as a step of its own build
+# (see ios/project.yml), so this job sets up Java and Gradle too.
+on:
+  workflow_dispatch:
+    inputs:
+      # A list rather than free text, so nothing arbitrary reaches the shell.
+      xcode:
+        description: "Xcode to build with. 27.1 gives the iPhone Duo's inner screen the wide layout"
+        type: choice
+        options:
+          - '27.1'
+          - '26.4.1'
+        default: '27.1'
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'ios/**'
+      - '!ios/check_apple_keys.py'
+      - '.github/workflows/ios-testflight.yml'
+
+concurrency:
+  group: ios-testflight
+
+jobs:
+  testflight:
+    # Xcode 27 is only on GitHub's separate Xcode 27 image (arm64, macOS 27);
+    # the macos-26 image stops at Xcode 26.6.
+    runs-on: ${{ inputs.xcode == '26.4.1' && 'macos-26' || 'xcode-27' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # The upload needs four Apple secrets, and it is the last step of an
+      # hour-long build. Checking they exist first turns "no secrets yet" into
+      # a one-minute answer that says which are missing, rather than a Mac
+      # runner spending that hour to fail at the end. Nothing is printed but
+      # the names.
+      - name: Check the Apple secrets are set
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=""
+          for name in APPLE_TEAM_ID ASC_ISSUER_ID ASC_KEY_ID ASC_KEY_P8; do
+            eval "value=\${$name}"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Add these repository secrets before building for TestFlight:$missing. The 'Apple keys check' workflow says whether the ones you add are the right ones."
+            exit 1
+          fi
+          echo "All four Apple secrets are set."
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+
+      # An app built with an older Xcode runs on the iPhone Duo's inner screen
+      # in a phone-sized window, so it would show the phone layout there. 27.1
+      # lets it fill the screen and use the wide one, which is the point of
+      # this build, so it is the default. Kotlin 2.4.21 is tested with Xcode up
+      # to 26.4, which a run started by hand can choose instead; 26.4 still
+      # meets App Store Connect's Xcode 26 requirement. If this runner image
+      # has no such Xcode, the step lists the ones it does have.
+      - name: Use Xcode ${{ inputs.xcode || '27.1' }}
+        env:
+          XCODE_VERSION: ${{ inputs.xcode || '27.1' }}
+        run: |
+          # Images name an install Xcode_27.1.app or Xcode_27.1.0.app; take either.
+          for app in "/Applications/Xcode_${XCODE_VERSION}.app" "/Applications/Xcode_${XCODE_VERSION}.0.app"; do
+            if [ -d "$app" ]; then sudo xcode-select -s "$app/Contents/Developer"; break; fi
+          done
+          xcodebuild -version | grep -q "^Xcode ${XCODE_VERSION}" || { echo "No Xcode ${XCODE_VERSION} on this image:"; ls /Applications | grep Xcode; exit 1; }
+          xcodebuild -version
+          echo "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version)"
+
+      # Kotlin/Native's compiler and its iOS libraries, about 1 GB, fetched once.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      # The same link Xcode's build step asks for, run first so a Kotlin error
+      # reads plainly here rather than deep in the Xcode log; Xcode then finds
+      # it already done.
+      - name: Build the shared Kotlin framework
+        run: gradle :shared:linkReleaseFrameworkIosArm64
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build the archive
+        run: |
+          # Run number and attempt, so a re-run still uploads a new build number.
+          xcodebuild archive \
+            -project ios/KCDiamonds.xcodeproj \
+            -scheme KCDiamonds \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/KCDiamonds.xcarchive" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Sign and upload to TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          trap 'rm -f "$KEY"' EXIT
+          # Internal testing only: the build goes to testers on this team
+          # and never to Apple's beta review.
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>testFlightInternalTestingOnly</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/KCDiamonds.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log"
+          test "${PIPESTATUS[0]}" -eq 0

@@ -7,7 +7,7 @@ import com.example.data.DiamondsDatabase
 import com.example.data.Seeder
 import com.example.data.StatLine
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
+import com.example.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

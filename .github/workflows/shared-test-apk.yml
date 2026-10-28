@@ -1,0 +1,72 @@
+name: Shared-code test APK
+
+# The Android app built from the shared-code branch, published as a
+# pre-release so it can be installed on a phone and checked before the branch
+# is merged into main.
+#
+# It is built exactly as build-apk.yml builds the everyday APK - the debug
+# build, signed with the same committed debug key, at the same version - so
+# Android installs it as an update over the app already on the phone and keeps
+# its data. The next build from main replaces it the same way.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/kmp-ios-app
+    paths-ignore:
+      - 'ios/**'
+      - 'docs/**'
+      - 'scraped/**'
+      - 'scripts/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shared-test-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+
+      # The debug signing keystore is stored base64-encoded in the repo;
+      # the build expects it at ${rootDir}/debug.keystore. Same key as the
+      # everyday build, which is what lets this install over it.
+      - name: Restore debug keystore
+        run: base64 -d debug.keystore.base64 > debug.keystore
+
+      # The shared module's tests run on the JVM here. They are the same tests
+      # the iPhone runs through iosSimulatorArm64Test, so an answer that
+      # differs between the two phones fails the build.
+      - name: Run the shared tests
+        run: gradle :shared:testAndroidHostTest
+
+      - name: Run the app's tests
+        run: gradle :app:testDebugUnitTest
+
+      - name: Build the APK
+        run: gradle :app:assembleDebug
+
+      - name: Publish it as the shared-code-test pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Test build of the Android app running on the code it now shares with the iPhone app (branch claude/kmp-ios-app, commit ${GITHUB_SHA::7}). Install kc-diamonds-shared-test.apk over the current app; it keeps your data. Not the everyday build: that stays on the latest-apk release."
+          gh release view shared-code-test --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create shared-code-test --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "KC Diamonds Stats - shared-code test build" --notes "$NOTES" --prerelease --latest=false
+          gh release edit shared-code-test --repo "$GITHUB_REPOSITORY" --notes "$NOTES" --target "$GITHUB_SHA"
+          cp app/build/outputs/apk/debug/app-debug.apk kc-diamonds-shared-test.apk
+          gh release upload shared-code-test kc-diamonds-shared-test.apk --repo "$GITHUB_REPOSITORY" --clobber

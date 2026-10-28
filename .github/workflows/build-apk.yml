@@ -23,12 +23,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.3.1'
+          gradle-version: '9.4.1'
 
       # The debug signing keystore is stored base64-encoded in the repo;
       # the build expects it at ${rootDir}/debug.keystore.
       - name: Restore debug keystore
         run: base64 -d debug.keystore.base64 > debug.keystore
+
+      # The shared module's tests run on the JVM here. They are the same
+      # tests the iPhone runs through iosSimulatorArm64Test, so an answer that
+      # differs between the two phones fails the build.
+      - name: Run the shared tests
+        run: gradle :shared:testAndroidHostTest
 
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest
