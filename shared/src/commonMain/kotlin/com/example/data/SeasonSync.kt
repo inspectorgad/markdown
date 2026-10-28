@@ -7,6 +7,9 @@ import com.example.platform.newHttp
 import com.example.platform.nowMillis
 import com.example.text.hex2
 import com.example.text.sha256
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.withContext
 
 sealed interface SyncResult {
     data class Updated(val generatedAt: String?) : SyncResult
@@ -43,33 +46,39 @@ object SeasonSync {
     fun shouldAutoSync(device: Device): Boolean =
         nowMillis() - device.settings(PREFS).long(KEY_SUCCESS_MS) > AUTO_SYNC_INTERVAL_MS
 
-    suspend fun sync(device: Device, dao: DiamondsDao): SyncResult {
+    // Off the main thread for the whole job, as it always was. The download
+    // itself already moves (OkHttp on Android, NSURLSession on iPhone), but
+    // the two steps after it do not: hashing ~290 KB and parsing it into a
+    // JSON tree are both plain Kotlin now, where they used to be MessageDigest
+    // and org.json, so on the main thread they would show as a stutter on
+    // every pull-to-refresh.
+    suspend fun sync(device: Device, dao: DiamondsDao): SyncResult = withContext(Dispatchers.IO) {
         val body = try {
             val response = http.get(DATA_URL)
             if (!response.isSuccessful) {
-                return SyncResult.Failed("server returned ${response.code}")
+                return@withContext SyncResult.Failed("server returned ${response.code}")
             }
             response.body
         } catch (e: HttpException) {
-            return SyncResult.Failed(e.reason ?: e.message ?: "network error")
+            return@withContext SyncResult.Failed(e.reason ?: e.message ?: "network error")
         }
-        if (body.isEmpty()) return SyncResult.Failed("empty response")
+        if (body.isEmpty()) return@withContext SyncResult.Failed("empty response")
 
         val root = SeasonDataValidator.parse(body)
-            ?: return SyncResult.Failed("downloaded data failed validation")
+            ?: return@withContext SyncResult.Failed("downloaded data failed validation")
 
         val hash = sha256(body).joinToString("") { hex2(it) }
         val settings = device.settings(PREFS)
         if (hash == settings.string(KEY_HASH)) {
             settings.edit { putLong(KEY_SUCCESS_MS, nowMillis()) }
-            return SyncResult.NoChange
+            return@withContext SyncResult.NoChange
         }
 
         try {
             StandingsStore.save(device, root)
             Seeder.merge(root, dao)
         } catch (e: Exception) {
-            return SyncResult.Failed("merge failed: ${e.message}")
+            return@withContext SyncResult.Failed("merge failed: ${e.message}")
         }
 
         val generatedAt = root.optString("generatedAt").takeIf { it.isNotBlank() }
@@ -78,7 +87,7 @@ object SeasonSync {
             putLong(KEY_SUCCESS_MS, nowMillis())
             putString(KEY_GENERATED_AT, generatedAt)
         }
-        return SyncResult.Updated(generatedAt)
+        SyncResult.Updated(generatedAt)
     }
 }
 

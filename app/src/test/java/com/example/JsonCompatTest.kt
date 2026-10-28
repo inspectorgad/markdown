@@ -75,9 +75,12 @@ class JsonCompatTest {
     }
 
     @Test
-    fun `the NCAA feed fixture reads back identically`() {
-        val feed = javaClass.classLoader!!.getResource("ncaa-game-utah-2026-10-01.json").readText()
-        assertEquals(AndroidObject(feed).toString(), KtObject(feed).toString())
+    fun `a raw box-score capture reads back identically`() {
+        // A second real payload, and a messier one: the scraper's own capture
+        // of a game page, whose strings carry tabs, newlines and the odd
+        // non-ASCII character from the published box score.
+        val box = File("../scraped/box-00-2a519a5.json").readText()
+        assertEquals(AndroidObject(box).toString(), KtObject(box).toString())
     }
 
     @Test

@@ -1,0 +1,79 @@
+name: iPhone shared-code check
+
+# Compiles the shared code for the iPhone and runs its tests on a simulator,
+# on any branch but main. It needs no Apple secrets and uploads nothing, so it
+# is the only way to know the iPhone half of the app is sound before an
+# App Store Connect account and its keys exist.
+#
+# ios-testflight.yml does build the same code, but only as the first step of
+# an upload, so it stops at the secrets check until those are set up. This job
+# is what covers shared/ in the meantime - and afterwards it still answers in
+# about ten minutes rather than an hour.
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'shared/**'
+      - 'gradle/libs.versions.toml'
+      - 'settings.gradle.kts'
+      - 'build.gradle.kts'
+      - '.github/workflows/ios-shared-check.yml'
+
+concurrency:
+  group: ios-shared-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-shared:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+
+      # Kotlin 2.4.21 is tested with Xcode up to 26.4; the runner's default is
+      # newer. This job only compiles and tests, so it stays on the tested one
+      # even though the TestFlight build uses 27.1 for the Duo's wide layout.
+      - name: Use Xcode 26.4.1
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.4.1.app/Contents/Developer || { ls /Applications | grep Xcode; exit 1; }
+          xcodebuild -version
+
+      # Kotlin/Native's compiler and its iOS libraries, about 1 GB, fetched once.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Compile the shared code for iPhone and link the framework
+        run: gradle :shared:compileKotlinIosArm64 :shared:linkDebugFrameworkIosSimulatorArm64
+
+      # The shared tests on an iPhone simulator: the same answers as Android.
+      # The simulator's name changes between Xcodes, so pick whichever iPhone
+      # this runner has and pass its id (shared/build.gradle.kts reads it).
+      - name: Run the shared tests on an iPhone simulator
+        run: |
+          IOS_SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = [d for runtime, ds in json.load(sys.stdin)["devices"].items() if "iOS" in runtime for d in ds]
+          print(next(d["udid"] for d in devices if d["name"].startswith("iPhone")))')
+          echo "Simulator $IOS_SIMULATOR"
+          export IOS_SIMULATOR
+          gradle :shared:iosSimulatorArm64Test
+
+      - name: Keep the shared test report when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-ios-test-report
+          path: shared/build/reports/tests

@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -146,12 +148,21 @@ fun DiamondsApp(viewModel: DiamondsViewModel) {
                             icon = {
                                 Icon(
                                     imageVector = tab.icon,
-                                    contentDescription = tab.label
+                                    contentDescription = tab.label,
+                                    // The selected tab's pill is sized from the
+                                    // icon: 4dp a side brings Material 3 1.4's
+                                    // 56dp pill back to the 64dp it always was.
+                                    modifier = Modifier.padding(horizontal = 4.dp)
                                 )
                             },
                             // Kept to one line: see TabLabel. "Standings" broke
                             // mid-word on a narrow screen.
-                            label = { TabLabel(tab.label) }
+                            label = { TabLabel(tab.label) },
+                            // Material 3 1.4 turned the selected label the
+                            // secondary colour; keep it dark, as it was.
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface
+                            )
                         )
                     }
                 }
