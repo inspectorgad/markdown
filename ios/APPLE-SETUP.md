@@ -153,6 +153,15 @@ you can always overwrite one.
 
 ## Part 6 — Check the keys before building anything
 
+> **While this work is still on a branch there is no "Run workflow" button.**
+> GitHub only shows it for workflows that are on the repository's default
+> branch, and these are not on `main` yet. Until they are, both workflows
+> below start on a push instead: `Apple keys check` whenever
+> `ios/check_apple_keys.py` changes, and the TestFlight build whenever
+> anything in `ios/` does. So for now, say the word and a one-line push will
+> set either going. Once the branch is merged, the buttons appear and this
+> part reads as written.
+
 1. In the repo, go to the **Actions** tab.
 2. Choose **Apple keys check** in the sidebar, then **Run workflow**.
 3. It finishes in about a minute and prints a line per check.
@@ -169,6 +178,9 @@ tells you which value is wrong and what it should look like.
 ---
 
 ## Part 7 — Build it to TestFlight
+
+(Again: until the branch is merged there is no button — a push to `ios/`
+starts it instead. See the note in Part 6.)
 
 1. **Actions** tab → **iOS TestFlight build** → **Run workflow**.
 2. Leave Xcode on **27.1**. That is what lets the app fill the iPhone Duo's
@@ -200,6 +212,8 @@ is no waiting for approval and no questions to answer.
 
 | What you see | What it means |
 | --- | --- |
+| No **Run workflow** button on any of these workflows | They are not on `main` yet. GitHub only offers the button for workflows on the default branch. See the note in Part 6. |
+| Red crosses on **iOS TestFlight build** lasting ~20 seconds | The secrets guard, working. Those runs fired on a push before the secrets existed and stopped rather than spending an hour to fail. |
 | The TestFlight build stops in under a minute naming secrets | One or more of the four is missing. Part 5. |
 | `Apple keys check` fails on "App Store Connect accepts the key" | The Issuer ID, Key ID and `.p8` do not belong to each other, or the key was revoked. Easiest fix is a fresh key: Part 3. |
 | `Apple keys check` fails on "the app exists" | Part 2 was not finished, or the bundle ID does not match exactly. |
