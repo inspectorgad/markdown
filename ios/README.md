@@ -37,6 +37,10 @@ and no device to register.
 
 ## What has to exist first
 
+**[APPLE-SETUP.md](APPLE-SETUP.md) walks through all of it, click by click** -
+registering the App ID, creating the app record, making the API key, adding
+the secrets and getting the first build onto a phone. The short version:
+
 Four repository secrets, which you add in **Settings → Secrets and variables
 → Actions**. Never paste them into a chat or a file:
 
