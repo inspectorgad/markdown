@@ -65,6 +65,28 @@ def asc_error(body):
     return f"{errors[0].get('status', '')} {errors[0].get('code', '')}: {errors[0].get('detail', '')}".strip()
 
 
+def check_signing_access(token):
+    """Whether this key may sign, which is the half of the build that fails last.
+
+    The upload step asks Apple to sign the archive with a distribution
+    certificate it keeps for the team ("cloud signing"), and a key without
+    enough access is refused - but only at the end of an hour-long build, with
+    a message about provisioning rather than about the key. Listing
+    certificates needs the same access, costs one request, and so moves that
+    answer to the front. A Developer-role key gets 403 here; Admin and App
+    Manager do not.
+    """
+    status, body = asc_get(token, "certificates", {"limit": "1"})
+    if status == 200:
+        report(True, "the key may sign builds", "it can read the team's certificates")
+    elif status == 403:
+        report(False, "the key may sign builds",
+               "403 - this key's access level is too low to sign. A key's access cannot be "
+               "changed after it is made: revoke it and generate a new one with Admin access")
+    else:
+        report(False, "the key may sign builds", f"HTTP {status} {asc_error(body)}")
+
+
 def check_app_store_connect(issuer, key_id, p8):
     now = int(time.time())
     try:
@@ -102,6 +124,8 @@ def check_app_store_connect(issuer, key_id, p8):
         report(True, "the App ID is registered", ", ".join(caps) or "no capabilities listed")
     else:
         report(False, "the App ID is registered", f"HTTP {status} {asc_error(body)}")
+
+    check_signing_access(token)
 
 
 team = secret("APPLE_TEAM_ID")
