@@ -28,6 +28,51 @@ if 'Batting Statistics' not in stats_txt or 'Pitching Statistics' not in stats_t
     print('verify-seed: stats snapshot incomplete; skipping')
     sys.exit(0)
 
+
+def season_year():
+    """The season the captured upstream pages are currently publishing.
+
+    Everything this script compares against - the aggregate page and the
+    BallClubz schedule listing - covers one season at a time, so the seed side
+    has to be narrowed to the same one. The year used to be the literal
+    '2026'. From the first 2027 game that would have made every scored game
+    fail as MISDATED and stopped the pipeline shipping any seed at all, which
+    is a guaranteed breakage on a known date.
+
+    BallClubz's schedule rows carry no year at all ("Sat 8/8"), so it cannot
+    come from there. The team's own schedule and results pages do print full
+    dates ("Oct 17, 2026"), and both are captured in the same run against the
+    same live site. The latest year they show is the season being published:
+    latest rather than first, because a results page that carries more than
+    one season still has the current one at the top of its range.
+
+    Returns None if nothing carries a year, rather than guessing. A guessed
+    year would fail every game in the seed, which is the breakage this
+    replaces.
+    """
+    years = set()
+    for path in ('scraped/schedule.txt', 'scraped/past-results.txt'):
+        try:
+            text = open(path).read()
+        except FileNotFoundError:
+            continue
+        years.update(re.findall(
+            r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r'\s+\d{1,2},\s*(\d{4})', text))
+    return max(years) if years else None
+
+
+year = season_year()
+
+
+def in_season(game):
+    """Is this game part of the season the upstream pages are publishing?
+
+    True for everything when the year is unknown, which keeps the behaviour
+    of a capture that has no dated page exactly as it was.
+    """
+    return year is None or game['date'].startswith(f'{year}-')
+
 # --- official batting totals, keyed by jersey number ---
 # Row shape: jersey \t "Last, First" \t AVG OBP SLG OPS G PA AB R H RBI ...
 # Same-person aliases as the parser uses, so a placeholder row and the real
@@ -82,9 +127,16 @@ for line in pitching_part.split('\n'):
             break
 
 # --- seed-side aggregates ---
+# Narrowed to the season the aggregate page covers. Once the seed holds two
+# seasons, an all-time seed total compared against a one-season official page
+# reads as every batter over-counting and the record permanently leading, so
+# the comparison has to be season for season. With one season in the seed this
+# is the whole seed and changes nothing.
 agg = {}
 seed_w = seed_l = 0
 for g in seed['games']:
+    if not in_season(g):
+        continue
     ts, os_ = g.get('teamScore'), g.get('opponentScore')
     if ts is not None and os_ is not None:
         if ts > os_: seed_w += 1
@@ -132,6 +184,11 @@ try:
                    open('scraped/ballclubz-schedule.txt').read().split('\n')]
 except FileNotFoundError:
     sched_lines = []
+if year is None:
+    sched_lines = []
+    warnings.append(
+        'no captured page carries a full date, so the BallClubz schedule rows '
+        '("Sat 8/8") cannot be given a year and the misdating check is skipped')
 # Build the set of games BallClubz publishes, as (date, us, them). A date can
 # hold more than one game - KC played an Aug 8 doubleheader - and the page
 # renders its list twice, so identical rows are deduplicated while differing
@@ -146,13 +203,19 @@ for i, line in enumerate(sched_lines):
     if not res:
         continue                                    # not played yet
     us, them = (int(x) for x in res.split()[1].split('-'))
-    published.add((f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}', us, them))
+    published.add((f'{year}-{int(md.group(1)):02d}-{int(md.group(2)):02d}', us, them))
 
 # Every scored game in the seed must be one BallClubz actually published on
 # that date. This is the check that catches a misdating, which no totals-based
 # check can see: moving a result one day leaves the record and every batting
 # total correct.
-scored_games = [g for g in seed['games'] if 'teamScore' in g]
+#
+# Scoped to the season on the page, because the listing publishes one season
+# at a time. Without that, every game from a finished season reads as one
+# BallClubz does not publish and fails - which is the same dated breakage as
+# the hard-coded year, arriving by a different route. A past season's games
+# were corroborated while they were current and do not change afterwards.
+scored_games = [g for g in seed['games'] if 'teamScore' in g and in_season(g)]
 uncorroborated = []
 if published:
     for g in scored_games:

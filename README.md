@@ -1,46 +1,103 @@
 # KC Diamonds Stats
 
-An Android app for the KC Diamonds softball team that captures every player's
-historical batting stats and keeps season aggregates up to date as new games
-are played.
+An Android app and a web dashboard for the KC Diamonds, a professional
+softball team, backed by a pipeline that scrapes their published results and
+folds them into the app's data on a schedule.
 
-## Features
+The 2026 season is complete: 41 games played, a 27-14 record, with a full box
+score for every one of them.
 
-- **Roster** — add players (name, jersey number, position) and see each
-  player's career batting line at a glance. Tap a player for per-season
-  aggregates, career totals, and a full game log.
-- **Games** — record games (date, opponent, season, score). Back-fill past
-  games to capture historical stats, then keep adding games for the rest of
-  the season. Inside a game, tap any player to enter their batting line
-  (AB, R, H, 2B, 3B, HR, RBI, BB, SO, HBP, SF, SB).
-- **Leaders** — filter by season (or all-time) to see the team's win–loss
-  record, runs for/against, team AVG/OBP/SLG, and leaderboards for batting
-  average, hits, home runs, RBIs, runs, and stolen bases.
+## Getting it
 
-Derived stats (AVG, OBP, SLG, OPS, total bases) are computed automatically
-from the raw counting stats, so aggregates always stay in sync as games are
-added or edited.
+**On an Android phone** — open the latest release and download
+`kc-diamonds.apk`:
 
-All data is stored locally on the device in a Room (SQLite) database.
+<https://github.com/inspectorgad/markdown/releases/latest>
 
-On first launch the app seeds itself from `app/src/main/assets/seed.json`
-(currently the confirmed 2026 KC Diamonds pro roster). Games and per-player
-box-score lines can be added to that file to ship pre-populated historical
-stats; seeding only runs when the database is empty, so it never overwrites
-user-entered data.
+Install it over any earlier copy; it keeps the data already on the phone. The
+app then updates its own season data over the network, so a new APK is only
+needed when the app itself changes.
 
-## Tech
+**In a browser** — the dashboard is published from `docs/` to this
+repository's GitHub Pages site (the address is on the repository's
+**Settings → Pages**, and is usually `https://<owner>.github.io/markdown/`).
+It installs to a phone's home screen like an app, and reads the same season
+data the Android app does.
 
-- Kotlin + Jetpack Compose (Material 3)
-- Room for persistence
-- Pure-Kotlin stats aggregation engine in `app/src/main/java/com/example/stats/`,
-  covered by unit tests in `app/src/test/`
+## What the app shows
 
-## Run Locally
+- **Roster** — every player with her career batting line. Tap one for
+  per-season totals, career totals and a game-by-game log.
+- **Games** — every game with its score, opponent, venue and event. Tap one
+  for the full box score. Games can also be added and edited by hand.
+- **Leaders** — the team's record, runs for and against, team AVG/OBP/SLG,
+  and leaderboards for average, hits, home runs, RBIs, runs and stolen bases,
+  filtered by season or across all of them.
+- **Standings** — the league table where one is published, and KC's own
+  record against each opponent, which is derived from the box scores this
+  repository holds rather than from anyone's ranking.
 
-**Prerequisites:** [Android Studio](https://developer.android.com/studio)
+Derived stats (AVG, OBP, SLG, OPS, total bases) are computed from the raw
+counting stats, so they stay in step with whatever is entered or synced.
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project
-4. Run the app on an emulator or physical device
+## Where the data comes from
+
+Nothing is typed in by hand unless you want it to be. A scheduled workflow
+drives a headless browser over the team's published pages, captures the raw
+box scores into `scraped/`, parses them into
+`app/src/main/assets/seed.json`, and checks that result against the
+officially published aggregates before it is allowed to ship.
+
+```
+BallClubz + the team site          scripts/scrape-kc-diamonds.mjs
+            |                                     |
+            v                                     v
+   scraped/box-*.json  ----------->  scripts/update-seed.py
+   (raw capture, committed)                       |
+                                                  v
+                                   app/src/main/assets/seed.json
+                                                  |
+                       +--------------------------+--------------------+
+                       v                                               v
+          bundled into the APK                       published as season-data.json
+          (first launch, offline)                    on the latest-apk release
+                                                                       |
+                                                     the installed app syncs from here
+```
+
+`scripts/verify-seed.py` sits between the parse and the release: it compares
+the seed against the official season totals and refuses to ship a seed whose
+numbers it cannot corroborate. The raw capture is committed either way, so a
+bad parse can always be investigated after the fact.
+
+The app merges new data rather than replacing it, so anything entered by hand
+survives a sync.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `app/` | The Android app: Kotlin, Jetpack Compose, Room |
+| `scripts/` | The scraper, the seed builder, the verifier, icon tools |
+| `scraped/` | The raw capture, committed as evidence |
+| `docs/` | The web dashboard, published to GitHub Pages |
+| `.github/workflows/` | The scrape, the APK build, the Pages deploy |
+
+## Building it
+
+Open the project in [Android Studio](https://developer.android.com/studio) and
+run it on an emulator or a device. The unit tests cover the stats engine, the
+data merge and the downloaded-data validator:
+
+```sh
+./gradlew :app:testDebugUnitTest
+```
+
+CI builds the APK on every push to `main` and publishes it to the rolling
+`latest-apk` release, alongside the season data the installed app syncs from.
+
+## For maintainers
+
+**[CLAUDE.md](CLAUDE.md)** is the full briefing: architecture, the pipeline in
+detail, how releases work, the decisions behind the design and why, the house
+conventions, known bugs, and what is still outstanding.

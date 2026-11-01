@@ -512,7 +512,12 @@ for g in seed['games']:
 try:
     for block in json.load(open('scraped/games.json')):
         mid = re.search(r'/live/([a-z0-9]+)$', block['href'])
-        md = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}), (\d{4})',
+        # \s* after the comma, matching the two other date regexes in this
+        # file and the test the scraper uses to decide it has climbed to a
+        # dated ancestor. A stricter single space here would let the scraper
+        # accept a context this end then cannot read, losing the id -> date
+        # mapping for that game with nothing logged.
+        md = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(\d{4})',
                        block['context'])
         if mid and md:
             id_to_date[mid.group(1)] = (
@@ -845,12 +850,26 @@ def smart_title(raw):
 
 
 def season_for(date_str, opponent):
-    """Postseason = the Aug championship week; Oct dates are fall exhibitions."""
-    if date_str >= '2026-10-01':
-        return '2026 Fall'
-    if date_str >= '2026-08-03':
-        return '2026 Postseason'
-    return '2026'
+    """Postseason = the Aug championship week; Oct dates are fall exhibitions.
+
+    The year comes from the date itself. It used to be written in as the
+    literal '2026-10-01' and '2026-08-03', which does not merely go stale on
+    1 Jan - it inverts. These are string comparisons, and '2027-06-15' sorts
+    above '2026-10-01', so the first game of a new season and every one after
+    it would have been labelled "2026 Fall" and filed under a season that had
+    already ended.
+
+    The month-and-day boundaries are still the 2026 calendar and are only a
+    guess about any other year. Check them against the published schedule each
+    season: a wrong boundary mislabels the handful of games around it, where a
+    wrong year mislabelled all of them.
+    """
+    year, month_day = date_str[:4], date_str[5:]
+    if month_day >= '10-01':
+        return f'{year} Fall'
+    if month_day >= '08-03':
+        return f'{year} Postseason'
+    return year
 
 
 KC_ALIASES = ('KANSAS CITY DIAMONDS', 'KC DIAMONDS')
