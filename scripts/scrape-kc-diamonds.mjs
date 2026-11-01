@@ -206,7 +206,16 @@ const gameBlocks = await gamesPage.evaluate(() => {
     for (let i = 0; i < 8 && el.parentElement; i++) {
       el = el.parentElement;
       const t = el.innerText || '';
-      if (/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/.test(t) && t.length < 500) break;
+      // Climb until an ancestor carries a full date, because that date is the
+      // only thing tying a game id to a day. This test used to name the 2026
+      // playing months and the literal year, which would have matched nothing
+      // in 2027: the climb would run to its limit, `context` would silently
+      // become a page-nav blob, and update-seed.py would lose its id -> date
+      // mapping while games.json still looked perfectly valid. All twelve
+      // months and any year, which is exactly what update-seed.py already
+      // parses out of the other end.
+      if (/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s*\d{4}/.test(t)
+          && t.length < 500) break;
     }
     out.push({ href: a.href.split('#')[0], context: (el.innerText || '').slice(0, 400) });
   }

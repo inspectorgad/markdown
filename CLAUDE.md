@@ -299,23 +299,51 @@ maintainer with no memory of the incident is the audience.
 
 ## 7. Known bugs and rough edges
 
-Several of these are **dated**: they are fine today and break on a known
-future date. Those are first.
+### Fixed — the three dated 2027 breakages (November 2026)
 
-### Will break in 2027
+Items 1–3 were guaranteed failures on a known date. They are fixed, and are
+kept here under their original numbers because the rest of this file and §8
+refer to items by number. What they were, and what replaced them:
 
-1. **`verify-seed.py` hard-codes `2026` in its published-schedule key.** From
-   the first 2027 game, every scored game becomes a hard failure and the
-   pipeline stops shipping any seed at all. This is a guaranteed, dated
-   breakage and the single highest-priority item in this file.
-2. **`update-seed.py`'s `season_for()` hard-codes 2026 dates** (`>= 2026-10-01`
-   Fall, `>= 2026-08-03` Postseason), and `EMBEDDED_MAP` hard-codes 29 game
-   ids. Both need rewriting for a new season.
-3. **The scraper's `games.json` context climb hard-codes the year and the
-   months** — `/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/`. In 2027 it matches
-   nothing, every `context` silently degrades to a page-nav blob, and
-   `update-seed.py` loses its game-id -> date mapping *while the file still
-   looks valid*. Silent, which makes it worse than the first two.
+1. **`verify-seed.py` hard-coded `2026` in its published-schedule key.** From
+   the first 2027 game every scored game would have failed as uncorroborated
+   and the pipeline would have stopped shipping any seed at all. Replaced by
+   `season_year()`, which reads the year off the team-site captures
+   (`scraped/schedule.txt`, `scraped/past-results.txt` — they print `Oct 17,
+   2026`; BallClubz's own rows carry no year at all, only `Sat 8/8`), and
+   takes the latest year present. Two consequences worth knowing: the
+   corroboration check and the seed-side aggregates are both now **scoped to
+   that one season**, because the pages upstream publish one season at a time
+   and an all-time seed compared against a one-season page reads as every
+   batter over-counting; and when **no** captured page carries a year the
+   check is skipped with a warning rather than run on a guess, since a guessed
+   year fails every game, which is the breakage being replaced.
+2. **`update-seed.py`'s `season_for()` hard-coded 2026 dates.** Worse than
+   stale: the comparisons are on strings, and `'2027-06-15' >= '2026-10-01'`
+   is true, so every 2027 game would have been labelled `2026 Fall`. The year
+   now comes from the date itself. **The month-and-day boundaries — 3 Aug for
+   the postseason, 1 Oct for the fall exhibitions — are still the 2026
+   calendar and are a guess about any other year. Check them against the
+   published schedule each season.** A wrong boundary mislabels the games
+   around it; the wrong year mislabelled all of them.
+   `EMBEDDED_MAP`'s 29 ids were left alone: they are a verified historical
+   floor for 2026 and are harmless in any later year, since every id the seed
+   already holds is folded in from its own `srcId` records.
+3. **The scraper's `games.json` context climb hard-coded the year and the
+   months** — `/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/`. The silent one:
+   in 2027 it would have matched nothing, every `context` would have degraded
+   to a page-nav blob, and `update-seed.py` would have lost its game-id ->
+   date mapping while `games.json` still looked valid. Widened to all twelve
+   months and any four-digit year, which is what `update-seed.py` already
+   parsed at the other end. The one remaining mismatch between the two — a
+   literal `, ` where the scraper allowed `,\s*` — was closed at the same time
+   so the finder cannot accept a context the parser then cannot read.
+
+All four behaviours were checked against the committed capture and against a
+simulated 2027 run: today's output is byte-identical (0 failures, 36
+warnings, 27-14, 41 games, `SEED_CHANGED=no`); a 2027 seed that would have
+produced 75 failures and exit 1 now passes; a genuine 2027 misdating is still
+caught; and a capture with no dated page warns instead of failing.
 
 ### Real bugs, live now
 
@@ -384,10 +412,12 @@ future date. Those are first.
 
 ## 8. TODO, in priority order
 
-1. **Fix the 2027 breakages — items 1, 2 and 3 of §7 — before next season.**
-   The verify-seed one stops the pipeline dead on a known date; the scraper
-   one fails silently, which is worse. Do these together with restoring the
-   four daily crons, since that is the same piece of seasonal work.
+1. **Finish the seasonal work before next season.** The three dated breakages
+   (§7 items 1–3) are fixed. What is left of that same piece of work is to
+   restore the four daily crons in `scrape-data.yml`, and to check the two
+   season boundaries in `season_for()` — 3 Aug and 1 Oct — against whatever
+   schedule the league actually publishes for the new year. The code no
+   longer assumes the year; it still assumes the shape of the 2026 calendar.
 2. **Decide the Kotlin Multiplatform branch** (§9). Built, tested, on
    TestFlight; the longer it sits the more it drifts from `main`.
 3. **Write a real Room migration before any schema change** (§7 item 4). This
