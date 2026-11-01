@@ -412,12 +412,53 @@ caught; and a capture with no dated page warns instead of failing.
 
 ## 8. TODO, in priority order
 
-1. **Finish the seasonal work before next season.** The three dated breakages
-   (§7 items 1–3) are fixed. What is left of that same piece of work is to
-   restore the four daily crons in `scrape-data.yml`, and to check the two
-   season boundaries in `season_for()` — 3 Aug and 1 Oct — against whatever
-   schedule the league actually publishes for the new year. The code no
-   longer assumes the year; it still assumes the shape of the 2026 calendar.
+1. **Restore the four daily crons in `scrape-data.yml` before next season** —
+   but confirm the March–May 2027 case first.
+
+   The crons to put back, exactly as they were in season (recoverable from
+   `git show dbdd3a9 -- .github/workflows/scrape-data.yml`), replacing the
+   single weekly `'7 14 * * 1'`:
+
+   ```yaml
+   - cron: '7 2 * * *'
+   - cron: '7 8 * * *'
+   - cron: '7 14 * * *'
+   - cron: '7 20 * * *'
+   ```
+
+   The comment block above them still argues for the off-season cadence and
+   has to be rewritten at the same time, or the file contradicts itself. Two
+   parts of that prose are not seasonal and are worth keeping: the note that
+   the official aggregate page may yet reconcile, and the argument that a
+   selector which rots in January is better found in January.
+
+   **What to confirm before restoring.** `verify-seed.py`'s `season_year()`
+   takes the *latest* four-digit year it finds in `scraped/schedule.txt` and
+   `scraped/past-results.txt`, and `in_season()` then scopes both the
+   corroboration check and the seed-side aggregates to that year. Between
+   roughly March and May 2027 the team site will list the 2027 schedule while
+   no 2027 game has been played, so `season_year()` returns `2027` and
+   `in_season()` excludes **every game in the seed**. Work out what that
+   leaves: `seed_w`/`seed_l` at 0-0, an empty `agg`, and a per-player
+   comparison against a `ballclubz-stats.txt` that may still hold 2026
+   totals. Two questions, in this order:
+
+   - **Does it exit 1?** A failure stops the pipeline shipping any seed, and
+     at four runs a day it fires repeatedly into an empty off-season.
+   - **Does it pass vacuously?** Worse than failing. A verifier that checks
+     nothing while reporting success is how a bad seed ships unnoticed.
+
+   Reproduce it rather than reasoning about it: copy the tree to a scratch
+   directory, edit the copied `scraped/*.txt` fixtures to show a 2027
+   schedule with no 2027 results, and run `python3 -I scripts/verify-seed.py`
+   from that root. Also check the June 2027 case, where the seed holds both
+   seasons. **Do not run the scripts in the working tree — they rewrite
+   `seed.json` in place.**
+
+   While you are in there, check the two season boundaries in `season_for()`
+   — 3 Aug for the postseason, 1 Oct for the fall exhibitions — against
+   whatever schedule the league actually publishes. The code no longer
+   assumes the year; it still assumes the shape of the 2026 calendar.
 2. **Decide the Kotlin Multiplatform branch** (§9). Built, tested, on
    TestFlight; the longer it sits the more it drifts from `main`.
 3. **Write a real Room migration before any schema change** (§7 item 4). This
