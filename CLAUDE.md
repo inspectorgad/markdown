@@ -225,6 +225,34 @@ much better found in January than on opening weekend.
   verify-seed checks against, and checking today's seed against a stale copy
   of the official aggregates would be worse than not checking.
 
+**Things that look like oversights but are not.** Each of these has been
+tried the other way and reverted:
+
+- *The opponent label clicked on the box tab is the truncated line-score
+  spelling* ("Atlanta Smok", "New York Ris"), because that is what the
+  clickable toggle says. Normalising it to the seed's spelling breaks the
+  click.
+- *`if (away === kc || !away.includes('Batters\t')) away = ''`* must stay.
+  Without it KC's own lines are stored as the opponent's, and the result looks
+  entirely plausible — which is what happened for all 16 away games.
+- *A box's date may be inferred from a score match only when that match is
+  unique.* Scores repeat; the permissive version attached an 8-2 box to a date
+  whose real result was 7-8.
+- *A TBD schedule slot is not a wildcard*, for absorbing a result or for
+  creating a row. Both permissive versions corrupted the schedule.
+- *Absence of a key means "not yet known".* `'teamScore' not in game` is the
+  gap-filling test throughout, in Python and in Kotlin. Writing explicit nulls
+  breaks all of them at once.
+- *Opposing players' names are stored exactly as the box prints them*,
+  upstream errors included, because folding them onto anything would invent
+  players. The seed therefore contains some names that are visibly wrong.
+- *Never route the opponent's half through the KC parser.* The KC path appends
+  unrecognised names to the roster, so one run would file ~40 opposing players
+  as Diamonds.
+- *Do not add a "batters' runs equal the team score" check.* It was measured
+  and rejected: it fails on correct data, because temporary runners are not in
+  the batting table.
+
 **Stats are implemented twice.** `stats/BattingStats.kt` in Kotlin and again
 in JavaScript inside `docs/index.html`. They must agree. If you change an
 aggregation rule, change both. (Consolidating them is on the TODO list.)
@@ -271,40 +299,115 @@ maintainer with no memory of the incident is the audience.
 
 ## 7. Known bugs and rough edges
 
-1. **`fallbackToDestructiveMigration` is armed.** Raising the schema version
-   wipes every installed phone. Nothing warns you.
-2. **`actions/checkout@v4` and `actions/setup-node@v4` warn about Node 20
-   deprecation** on every run. They still work; it is noise until it isn't.
-3. **The batting aggregation exists twice** (§5) and nothing checks that the
-   two agree.
-4. **The dashboard duplicates the app's stat definitions in JavaScript** with
-   no tests at all.
-5. **The scrape's id floor has no margin.** It fires when a run reaches fewer
-   games than the seed has lines for — currently exactly 41 of 41 — so one
-   transient page failure fails the run. That is intentional, but expect the
-   occasional red mark rather than a real fault.
-6. **GitHub's scheduler delivers the weekly scrape hours late** (observed
-   ~5¾ hours). Harmless weekly; it was the reason for six-hourly in season.
+Several of these are **dated**: they are fine today and break on a known
+future date. Those are first.
 
----
+### Will break in 2027
+
+1. **`verify-seed.py` hard-codes `2026` in its published-schedule key.** From
+   the first 2027 game, every scored game becomes a hard failure and the
+   pipeline stops shipping any seed at all. This is a guaranteed, dated
+   breakage and the single highest-priority item in this file.
+2. **`update-seed.py`'s `season_for()` hard-codes 2026 dates** (`>= 2026-10-01`
+   Fall, `>= 2026-08-03` Postseason), and `EMBEDDED_MAP` hard-codes 29 game
+   ids. Both need rewriting for a new season.
+3. **The scraper's `games.json` context climb hard-codes the year and the
+   months** — `/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/`. In 2027 it matches
+   nothing, every `context` silently degrades to a page-nav blob, and
+   `update-seed.py` loses its game-id -> date mapping *while the file still
+   looks valid*. Silent, which makes it worse than the first two.
+
+### Real bugs, live now
+
+4. **`fallbackToDestructiveMigration` is armed.** Raising the schema version
+   wipes every installed phone. Nothing warns you.
+5. **`verify-seed.py`'s `systemic` flag has an operator-precedence bug.**
+   `len(over) >= 3 and bool(uncorroborated) or bool(uncorroborated)` reduces to
+   `bool(uncorroborated)`, so the documented "3 or more drifted players"
+   threshold is dead. One misdated game produces ~33 failure lines instead of
+   2, burying the real finding.
+6. **`canonical()` calls `.title()`**, which mangles intercapital surnames
+   (`McMillan` -> `Mcmillan`). The mismatch is silent — the player is just
+   skipped — so "19 official batters checked" overstates real coverage, which
+   is 17 of 24. The highest-AB batter on the roster is currently never
+   cross-checked.
+7. **The scraper's shortfall guard double-counts gated games.**
+   `reached = boxOk + gated`, but `gated` is already inside `boxOk`. The guard
+   over-reports what was reached in exactly the situation the gating counter
+   was added for. That path has never fired, so it is wholly untested.
+8. **Pitching decisions are matched by surname**, so a pitcher listed twice in
+   one table gets the decision twice. This is live in the seed: 2026-07-04 and
+   2026-07-31 both have an opposing starter appearing twice.
+9. **Only the first 20 warnings print**, while the summary counts all of them.
+   A new warning class landing after position 20 is invisible in CI logs.
+
+### Traps in the build and release machinery
+
+10. **`build-apk.yml` still fires on pushes to
+    `claude/kc-diamonds-stats-app-r7de5h`** — the dead branch from §9. A push
+    there would clobber both `kc-diamonds.apk` and `season-data.json` on the
+    public `latest-apk` release with a July build, pushing stale data to every
+    installed phone. This is the concrete reason that branch must not be
+    pushed to, and removing the trigger would be a kindness.
+11. **The app's feed resolves `releases/latest/download/season-data.json`** —
+    GitHub's *floating* latest-release pointer, not a fixed tag. Any new
+    non-prerelease release silently redirects every installed app's feed.
+    Mark anything else as a pre-release.
+12. **`docs/sw.js` caches the dashboard under a hand-maintained
+    `VERSION = "v1"`.** Change the page without bumping it and home-screen
+    installs keep the old shell. The Pages workflow will not catch this.
+13. **`.build-outputs/app-debug.apk`** is an 18 MB APK committed at the root
+    commit, not gitignored, refreshed by nothing. It is neither the current
+    build nor the v1-stable one. Do not ship it.
+14. **`v1-stable`'s rollback asset is named `app-debug.apk`**, not
+    `kc-diamonds.apk` — it predates the rename and cannot be regenerated under
+    the new name.
+
+### Structural
+
+15. **The batting aggregation exists twice** — `stats/BattingStats.kt` and
+    again in JavaScript inside `docs/index.html` — with nothing checking that
+    the two agree. The dashboard has no tests of any kind.
+16. **The pitching data has no consumer.** 81 KC pitching rows, 110 opposing
+    pitching rows and 429 opposing batting lines are collected, checksummed
+    and verified on every run, and neither the app nor the dashboard reads any
+    of it.
+17. **`actions/checkout@v4` and `actions/setup-node@v4`** warn about Node 20
+    deprecation on every run.
+18. **The scrape cannot be tested locally.** The sites are unreachable from a
+    development sandbox, so DOM and selector changes have historically shipped
+    unverified. Reason about failure modes; you cannot observe them.
+19. **Every script uses relative paths and must run from the repo root.** Run
+    `update-seed.py` elsewhere and it finds no capture, swallows the
+    `FileNotFoundError`s and exits 0 with `SEED_CHANGED=no` — indistinguishable
+    from a successful no-op.
 
 ## 8. TODO, in priority order
 
-1. **Decide the Kotlin Multiplatform branch** (§9). It is built and tested and
-   waiting; the longer it sits, the more it drifts from `main`.
-2. **Write a real Room migration before any schema change.** This is the one
-   that loses user data if forgotten.
-3. **Unify the stats engine** so Kotlin and the dashboard cannot disagree —
-   or, failing that, add a test that runs the same fixture through both.
-4. **Replace the Node 20 actions** when GitHub stops forcing them onto 24.
-5. **Restore the four daily crons before next season.** Nothing else in the
-   pipeline is seasonal; the comment in `scrape-data.yml` says what to do.
-6. **Decide whether the 2026 data is final** and, if so, whether the weekly
-   scrape should stop entirely rather than run all winter.
-7. **The dashboard has no test of any kind.** A smoke test that it renders the
-   current seed would be cheap.
-
----
+1. **Fix the 2027 breakages — items 1, 2 and 3 of §7 — before next season.**
+   The verify-seed one stops the pipeline dead on a known date; the scraper
+   one fails silently, which is worse. Do these together with restoring the
+   four daily crons, since that is the same piece of seasonal work.
+2. **Decide the Kotlin Multiplatform branch** (§9). Built, tested, on
+   TestFlight; the longer it sits the more it drifts from `main`.
+3. **Write a real Room migration before any schema change** (§7 item 4). This
+   is the one that loses a user's data if forgotten.
+4. **Fix the `systemic` precedence bug and `canonical()`'s `.title()`**
+   (§7 items 5 and 6). Both make the verifier quietly weaker than it reads.
+5. **Remove `build-apk.yml`'s trigger on the dead branch** (§7 item 10). One
+   line, removes a foot-gun that publishes stale data to every phone.
+6. **Give the pitching data a consumer, or stop collecting it** (§7 item 16).
+   It is fully parsed and verified and entirely unread.
+7. **Unify the stats engine** so Kotlin and the dashboard cannot disagree, or
+   add a test that runs one fixture through both.
+8. **Fix the shortfall guard's gated double-count** (§7 item 7).
+9. **Raise the `warnings[:20]` print cap** so new warning classes are visible.
+10. **Replace the Node 20 actions** when GitHub stops forcing them onto 24.
+11. **Decide whether the 2026 data is final**, and whether the weekly
+    off-season scrape should stop rather than run all winter. It is currently
+    watching for the official aggregates to reconcile; nobody has decided how
+    long to wait.
+12. **Add any smoke test at all for the dashboard.**
 
 ## 9. Branches
 
