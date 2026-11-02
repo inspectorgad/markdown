@@ -519,7 +519,7 @@ caught; and a capture with no dated page warns instead of failing.
 | `claude/handoff-claude-md` | **Yes** — PR #1, 1 Nov | Produced this file. Safe to delete. |
 | `claude/pitching-parser` | **Yes** — fast-forwarded 13 Oct, no merge commit | Done. Safe to delete. |
 | `claude/kmp-ios-app` | **No** — 7 commits ahead | Live work. See below. |
-| `claude/session-archive` | **No** | A narrative archive of the session that built this project. Documentation, no code. |
+| `claude/session-archive` | **No** | Documentation only, no code: a narrative archive of the session that built this project, plus the corrections to this file described in §10. |
 | `claude/kc-diamonds-stats-app-r7de5h` | **No — and it never can be** | Dead history. See below. |
 
 One further `claude/` branch in this repository belongs to a different app

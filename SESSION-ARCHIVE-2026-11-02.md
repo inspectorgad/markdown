@@ -579,13 +579,17 @@ re-verified from the PR as it now stands.)*
 | `claude/handoff-claude-md` | **Yes** — PR #1, 1 Nov | Done. Safe to delete. |
 | `claude/pitching-parser` | **Yes** — fast-forwarded 13 Oct | Done. Safe to delete. |
 | `claude/kmp-ios-app` | **No** — 7 commits ahead | Built and tested. Awaiting the landscape decision. |
-| `claude/session-archive` | **No** — 1 commit ahead | Carries this document. |
+| `claude/session-archive` | **No** | Carries this document **and** the `CLAUDE.md` corrections below. Documentation only, no code. |
 | `claude/kc-diamonds-stats-app-r7de5h` | **No — and it never can be** | Dead history. Do not push. |
 
 **One further `claude/` branch exists** —
 `claude/ku-volleyball-app-feasibility-c4se1m` — which belongs to a different app
-entirely and is not part of this project. That makes **six** on `origin`.
-(`CLAUDE.md` §9 lists only three and is now stale on both counts; see below.)
+entirely and is not part of this project.
+
+No total is given here on purpose. Short-lived documentation branches come and
+go, so any count written into a file is wrong the next time someone opens one —
+which is precisely how `CLAUDE.md` §9's table came to be stale. **`git branch
+-r` is the authority.**
 
 ### Releases
 
@@ -611,11 +615,16 @@ entirely and is not part of this project. That makes **six** on `origin`.
 
 ---
 
-## Corrections owed to `CLAUDE.md`
+## Corrections owed to `CLAUDE.md` — applied on this branch
 
 `CLAUDE.md` merged into `main` on 1 November. Fact-checking **this** document
-against the code turned up four errors it inherited from the briefing, which
-means the briefing has them too. None has been fixed there.
+against the code turned up four errors it had inherited from the briefing,
+which meant the briefing had them too.
+
+**They are fixed in the `CLAUDE.md` on this branch, and still present on
+`main`.** The table below is what was wrong, kept as the record of it; the
+corrected file says the same things in place. Merging this branch carries both
+the archive and the fixes.
 
 | § | Claim | What the code shows |
 | --- | --- | --- |
@@ -624,10 +633,14 @@ means the briefing has them too. None has been fixed there.
 | **§9** | "Each replacement ships with a test comparing it against the Android API" | **Three of six** do: `JsonCompatTest`, `NumbersTest`, `Sha256Test`. No test for the HTTP, date or settings replacements. |
 | **§3** | The aggregate page "appears to count the regular season only," explaining 26-13 vs 27-14 | Regular season only is **25-12**. The explanation does not account for the gap. Also "about twenty" over-counts is really **31 lines across 12 players**. |
 
-Two further staleness items, both minor and both a consequence of this session's
-own last few hours: §9's branch table predates PR #1 merging and the creation of
-`claude/session-archive`, and §1's "There is no `main`-side work in flight" was
-written before that merge.
+A fifth was found while applying these: §10's bullet teaching *"when two sources
+disagree, find out why rather than picking one"* used the 26-13 gap as its
+example and called it "real and **explicable**." It is real and *unexplained* —
+the word closed the very question the rule exists to keep open, in the sentence
+teaching the rule. Also corrected on this branch.
+
+Plus the staleness: §9's branch table predated PR #1 merging, and now says
+`git branch -r` is the authority rather than carrying a count that rots.
 
 ---
 
