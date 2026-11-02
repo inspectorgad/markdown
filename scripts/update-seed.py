@@ -453,6 +453,41 @@ def resolve_player(first, last):
     return match
 
 
+def season_year():
+    """The year the captured upstream pages are currently publishing.
+
+    BallClubz's schedule rows carry no year at all - they read "Sat 8/8" - so
+    any date built from one needs its year from somewhere else. That somewhere
+    used to be the literal 2026, written into ballclubz_results() below. From
+    the first 2027 game it would have dated every published result to 2026:
+    real scores attached to the wrong year, silently, while the capture and
+    the seed both still looked entirely valid. The same mistake in
+    verify-seed.py was found and fixed; this one is the same class in the same
+    repository and was missed on that pass.
+
+    The team's own schedule and results pages do print full dates ("Oct 17,
+    2026") and are captured in the same run against the same site, so the
+    latest year they show is the season being published. verify-seed.py
+    derives its year the same way from the same two files, deliberately: if
+    these ever disagreed, the seed and the gate that checks it would be
+    reading different seasons.
+
+    Returns None rather than guessing. The caller then refuses to date
+    anything at all, which loses a signal; dating it wrongly would corrupt
+    one.
+    """
+    years = set()
+    for path in ('scraped/schedule.txt', 'scraped/past-results.txt'):
+        try:
+            text = open(path).read()
+        except FileNotFoundError:
+            continue
+        years.update(re.findall(
+            r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+            r'\s+\d{1,2},\s*(\d{4})', text))
+    return max(years) if years else None
+
+
 def ballclubz_results():
     """[(date, opponent, us, them)] from BallClubz's own schedule listing.
 
@@ -469,6 +504,12 @@ def ballclubz_results():
                  open('scraped/ballclubz-schedule.txt').read().split('\n')]
     except FileNotFoundError:
         return []
+    year = season_year()
+    if year is None:
+        print('::warning::no captured page carries a full date, so BallClubz '
+              'schedule rows ("Sat 8/8") cannot be given a year - skipping '
+              'them rather than dating them wrongly')
+        return []
     out = []
     for i, line in enumerate(lines):
         md = re.match(r'^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})/(\d{1,2})$', line)
@@ -481,7 +522,7 @@ def ballclubz_results():
             continue                       # PREVIEW / unplayed
         us, them = (int(x) for x in res.split()[1].split('-'))
         name = re.sub(r'^(VS\.|@)\s+', '', opp).strip()
-        out.append((f'2026-{int(md.group(1)):02d}-{int(md.group(2)):02d}',
+        out.append((f'{year}-{int(md.group(1)):02d}-{int(md.group(2)):02d}',
                     CANONICAL_OPP.get(name.upper(), name), us, them))
     return out
 
@@ -969,7 +1010,13 @@ def parse_schedule():
                 event = None
             # Championship week is listed as bare TBD matchups at a neutral
             # site; the site never names the bracket, so label it ourselves.
-            if not event and season_for(date, opponent) == '2026 Postseason':
+            # endswith, not ==. This compared against the literal
+            # '2026 Postseason' until season_for() stopped hard-coding the
+            # year, at which point the equality silently became False for
+            # every season but 2026 and the championship label stopped being
+            # applied - a fix to one end of a function breaking the only call
+            # site that read its return value as a string.
+            if not event and season_for(date, opponent).endswith('Postseason'):
                 event = 'PSL Championship'
             prev = out.get((date, opponent), {})
             out[(date, opponent)] = {

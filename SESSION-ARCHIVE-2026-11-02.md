@@ -637,10 +637,31 @@ A fifth was found while applying these: §10's bullet teaching *"when two source
 disagree, find out why rather than picking one"* used the 26-13 gap as its
 example and called it "real and **explicable**." It is real and *unexplained* —
 the word closed the very question the rule exists to keep open, in the sentence
-teaching the rule. Also corrected on this branch.
+teaching the rule.
 
-Plus the staleness: §9's branch table predated PR #1 merging, and now says
-`git branch -r` is the authority rather than carrying a count that rots.
+### Then a full sweep found twenty more
+
+The five above were found only because *this* document happened to quote them.
+Nothing had swept the rest of the briefing. A second pass over every section
+turned up twenty further confirmed findings, and the pattern is the point: the
+errors clustered in the passages nobody had cause to re-read. The ones that
+matter most:
+
+| § | What was wrong |
+| --- | --- |
+| **§2** | A documented `standings` array **the artifact has never contained**. `StandingsStore` reads it on every launch and sync; nothing writes it, and the feed is a byte copy of the seed. The Standings tab has only ever shown the derived per-opponent record. |
+| **§7** | A **fourth dated 2027 breakage**, live, in the same script as the three just declared fixed: `ballclubz_results()` built every date as `f'2026-…'` from year-less rows. From the first 2027 game it would attach **real scores to the wrong year, silently.** |
+| **§7 item 2** | The `season_for()` fix **broke its own call site** — one caller compared the result to the literal `'2026 Postseason'`, so the championship label silently stopped being applied from 2027. |
+| **§2** | "Gap-fills only… never overwrites what is there" has two exceptions: `event` and `location` *are* replaced. And the Python side reassigns whole stat-line arrays on every run. |
+| **§7 item 12** | Described the service worker as doing the **opposite** of what it does. `index.html` is network-first and explicitly bypasses the HTTP cache. |
+| **§6** | "Python: standard library only" — two scripts import Pillow, undeclared and uninstalled. |
+| **§2** | The `srcId` example quoted an id belonging to a **different game** — in the bullet explaining why ids matter. |
+
+Also corrected: the opposing-player count if the parser were misrouted (**96**, not "~40" — the roster would go 24 → 120), the real coverage of the batter cross-check (**17 of 19**, not 17 of 24 — two different denominators), the claim that the shortfall guard "has never fired" (it fired on 20 Oct and worked; only its `gated > 0` arithmetic is untested), the two distinct landscape thresholds (600dp for the rail, ~821dp for the second pane), and a `main` commit count that had gone stale within a fortnight.
+
+**Both code bugs were fixed and verified** against the committed capture: output byte-identical (27-14, 41 games, `SEED_CHANGED=no`, 0 failures / 36 warnings), and both demonstrably correct for 2027 and beyond.
+
+Neither file now carries a branch count or a commit count. Twice in two days a number written into prose went stale while the prose stayed confident, so both say **`git branch -r` / `git rev-list --count` is the authority** and explain why.
 
 ---
 

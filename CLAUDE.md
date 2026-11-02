@@ -41,7 +41,7 @@ app/                        Android app (Kotlin, Jetpack Compose, Room)
     stats/BattingStats.kt   the aggregation engine
     ui/                     DiamondsApp (tab host) + one file per screen
   src/main/assets/seed.json THE data artifact (see §3)
-  src/test/                 unit tests, run in CI on every push
+  src/test/                 unit tests — run on push to main, NOT on PRs
 scripts/
   scrape-kc-diamonds.mjs    Playwright scraper -> scraped/
   update-seed.py            scraped/ -> seed.json
@@ -63,15 +63,15 @@ source of truth. Understand that file and you understand the system.
 
 ```jsonc
 {
-  "formatVersion": 1,            // the app refuses anything higher
+  "_comment": "…",               // provenance note; the parser writes it
+  "formatVersion": 1,            // the SYNCED FEED refuses anything higher
   "generatedAt": "2026-10-13T16:12:26Z",
   "players":  [ { "name", "jerseyNumber", "position" } ],
-  "standings": [ { "team", "w", "l", "t", "rf", "ra", "kc" } ],
   "games": [ {
     "date": "2026-08-08",        // ISO, so text order == date order
     "opponent", "season", "event", "location",
     "teamScore": 8, "opponentScore": 2,
-    "srcId": "2b7aa5e",          // upstream id — the real key, see §5
+    "srcId": "2bcc4af",          // upstream id — the real key, see §5
     "lines":            [ { "player", "ab","r","h","2b","3b","hr","rbi","bb","so","hbp","sf","sb" } ],
     "pitching":         [ { "player","outs","h","r","er","bb","so","pitches","strikes","dec" } ],
     "opponentLines":    [ ... ],  // same shape as lines
@@ -80,14 +80,35 @@ source of truth. Understand that file and you understand the system.
 }
 ```
 
-Three things in there are easy to get wrong:
+Five things in there are easy to get wrong:
 
 - **`outs`, not innings.** `5.1` in a box score means five and one third. It
   is stored as `16`. Storing `5.1` as a decimal would make every ERA quietly
   wrong by a little, which is worse than loudly wrong.
 - **`srcId` is the key, not the date.** 8 Aug 2026 was a doubleheader. Keying
   on date collapsed the two games into one; that bug is why this field exists.
+  (The two halves are `2bcc4af`, the 8-2, and `2bd2368`, the 7-8. An earlier
+  version of this block illustrated the point with `2b7aa5e` — which is the
+  15 Jul game against St. Louis Gateway Gold, a 7-0. Quoting the wrong id in
+  the example for *why ids matter* is its own small lesson.)
 - **`dec`** is `W`, `L` or `S` and comes from the wrap text, not the table.
+- **There is no `standings` array, and there never has been.** `StandingsStore`
+  (`data/Standings.kt`) reads a top-level `standings` of
+  `{team, w, l, t, rf, ra, kc}` out of this file on every launch and every
+  sync — and nothing writes one. No commit in this repository has put the key
+  in `seed.json`, `update-seed.py` never emits it, and the feed is a byte copy
+  of the seed, so neither source can supply it. `optJSONArray("standings") ?:
+  return` makes both calls silent no-ops. The cause is upstream, and
+  `Standings.kt:27` records it: the league publishes no table, and every
+  standings URL 404s or comes back empty. **The Standings tab is not broken by
+  this** — it falls through to KC's own record by opponent, derived from the
+  scored games. Treat `StandingsRow`/`StandingsStore` as a consumer waiting
+  for a table that may yet appear, not as dead code. The scraper still probes
+  for one every run and commits `scraped/standings-*.txt`.
+- **`formatVersion` gates the feed, not the bundle.** `SeasonSync` refuses a
+  downloaded `season-data.json` whose version it does not know. `Seeder.sync()`
+  parses the bundled asset and hands it straight to `merge()` with no version
+  check at all, so a bundled seed stamped `2` would be merged, not refused.
 
 ### The app
 
@@ -104,9 +125,17 @@ Data reaches the app two ways, both through the same merge:
 2. **Synced** — `SeasonSync.sync()` fetches `season-data.json` from the
    `latest-apk` release, at most every 6 hours or on pull-to-refresh.
 
-Both call `Seeder.merge()`, which **gap-fills only**: it adds what is missing
-and never overwrites what is there. That is what lets someone type a score in
-by hand and keep it through every subsequent sync.
+Both call `Seeder.merge()`, which **gap-fills the numbers**: it adds games and
+stat lines that are missing and never touches a score or a line that is already
+there. That is what lets someone type a score in by hand and keep it through
+every subsequent sync.
+
+**Two fields are exceptions, and "never overwrites what is there" was too
+strong.** `event` and `location` *are* replaced when the incoming seed carries
+a non-empty value that differs from the stored one (`detailsChanged` in
+`Seeder.kt`). That is deliberate — a venue announced after the fact should
+land — but it means a hand-typed venue does not survive a sync, while a
+hand-typed score does.
 
 ---
 
@@ -210,8 +239,20 @@ is a claim. The parser returns nothing for a gated table rather than a row of
 zeros, and a re-derive that would more than halve a game's at-bats is refused
 outright.
 
-**The seed is gap-filled, never replaced.** The whole point is that a correction
-typed in by hand survives.
+**The seed is gap-filled, never replaced — on the Kotlin side.** The whole
+point is that a correction typed in by hand survives into the app.
+
+**The Python side is not gap-fill-only, and this is the subtler half.**
+`update-seed.py`'s "Reconcile retractions" section re-derives `lines` and
+`pitching` (and the opponent's two) from the committed capture and **assigns
+the rebuilt arrays back** — `g['lines'] = rebuilt` — for any game whose
+snapshot still parses. The intent is narrow and good: BallClubz sometimes
+retracts a mis-entered player, and a line the source no longer lists would
+inflate our totals above the official aggregates forever. But the mechanism is
+replacement, not removal, so a hand-edited stat line in `seed.json` does **not**
+survive the next run. (Which is also why §10 says not to hand-edit `seed.json`:
+fix the parser instead.) The guard is the at-bat floor — a re-derive that would
+more than halve a game's at-bats is refused outright and says so.
 
 **An older bundled seed must not roll back newer synced data — but this guard
 is not in the shipping app.** An APK carries whatever data was current when it
@@ -274,8 +315,12 @@ tried the other way and reverted:
   upstream errors included, because folding them onto anything would invent
   players. The seed therefore contains some names that are visibly wrong.
 - *Never route the opponent's half through the KC parser.* The KC path appends
-  unrecognised names to the roster, so one run would file ~40 opposing players
-  as Diamonds.
+  unrecognised names to the roster. Counted from the committed capture, one
+  run would file **96** opposing players as Diamonds and take the roster from
+  24 to 120 — the seed holds 74 distinct opposing batters and 31 opposing
+  pitchers, 99 in the union, of which only 3 are already on the roster. An
+  earlier version of this entry said "~40", understating it by well over
+  double.
 - *Do not add a "batters' runs equal the team score" check.* It was measured
   and rejected: it fails on correct data, because temporary runners are not in
   the batting table.
@@ -314,7 +359,15 @@ maintainer with no memory of the incident is the audience.
 
 - Kotlin: 4-space indent in `app/src/main/java`, 2-space in Gradle files.
   Compose functions are `PascalCase`; everything else is standard Kotlin style.
-- Python: standard library only, no dependencies, run straight by the workflow.
+- Python: the **pipeline** scripts — `update-seed.py`, `verify-seed.py`,
+  `parse-pitching.py` — are standard library only, no dependencies, run
+  straight by the workflow. Keep them that way; the workflow pip-installs
+  nothing. The two icon generators are the exception and break the rule:
+  `make-launcher-icons.py` and `make-web-icons.py` both import **Pillow**,
+  which is not declared anywhere — no `requirements.txt`, no install step, no
+  mention. On a clean checkout they fail with `ModuleNotFoundError`. They are
+  also run by no workflow, which is why nobody has noticed. An earlier version
+  of this file said "standard library only" without qualification.
 - Fail closed. When a parse is ambiguous, refuse rather than guess, and say so
   loudly enough to show up in a log.
 - Commit messages are prose, not bullet lists: what changed, and why it was
@@ -326,11 +379,19 @@ maintainer with no memory of the incident is the audience.
 
 ## 7. Known bugs and rough edges
 
-### Fixed — the three dated 2027 breakages (November 2026)
+### Fixed — the dated 2027 breakages (November 2026)
 
-Items 1–3 were guaranteed failures on a known date. They are fixed, and are
-kept here under their original numbers because the rest of this file and §8
-refer to items by number. What they were, and what replaced them:
+These were guaranteed failures on a known date. They are fixed, and are kept
+here under their original numbers because the rest of this file and §8 refer
+to items by number.
+
+**There were four, not three.** The first pass found and fixed three; a later
+sweep of this file against the code found a fourth of exactly the same class,
+in the same script, which that pass had missed — see **item 3b**. Treat "I
+have fixed the hard-coded years" as a claim to re-check by grep, not to
+inherit: `grep -n "2026" scripts/*.py scripts/*.mjs` is the whole audit.
+
+What they were, and what replaced them:
 
 1. **`verify-seed.py` hard-coded `2026` in its published-schedule key.** From
    the first 2027 game every scored game would have failed as uncorroborated
@@ -356,6 +417,15 @@ refer to items by number. What they were, and what replaced them:
    `EMBEDDED_MAP`'s 29 ids were left alone: they are a verified historical
    floor for 2026 and are harmless in any later year, since every id the seed
    already holds is folded in from its own `srcId` records.
+
+   **This fix broke its own call site, and that was missed for a day.**
+   `season_for()` returns a string, and one caller compared it to the literal
+   `'2026 Postseason'` to decide whether to label a game `PSL Championship`.
+   Once the function started returning `f'{year} Postseason'`, that equality
+   was False for every season but 2026 and the label silently stopped being
+   applied. Now `.endswith('Postseason')`. The lesson is cheap and general:
+   when a function stops hard-coding a value, grep every call site that reads
+   its return value as a string.
 3. **The scraper's `games.json` context climb hard-coded the year and the
    months** — `/\b(Jun|Jul|Aug|Sep|Oct)\s+\d{1,2},\s*2026/`. The silent one:
    in 2027 it would have matched nothing, every `context` would have degraded
@@ -366,7 +436,24 @@ refer to items by number. What they were, and what replaced them:
    literal `, ` where the scraper allowed `,\s*` — was closed at the same time
    so the finder cannot accept a context the parser then cannot read.
 
-All four behaviours were checked against the committed capture and against a
+3b. **`update-seed.py`'s `ballclubz_results()` built every date from the
+    literal year 2026** — `f'2026-{mm}-{dd}'`. This is the same mistake as
+    item 1, in the other script, reading the same year-less BallClubz rows
+    (`Sat 8/8`). From the first 2027 game it would have dated every published
+    result to 2026: **real scores attached to the wrong year**, silently,
+    while the capture and the seed both still looked valid. It is arguably
+    the worst of the four, because item 1's version failed loudly and this
+    one writes plausible wrong data.
+
+    Fixed the same way: a `season_year()` in `update-seed.py` that reads the
+    latest four-digit year out of the team-site captures, deliberately
+    mirroring `verify-seed.py`'s. **The two must agree** — if they ever
+    diverge, the seed and the gate that checks it are reading different
+    seasons. When no captured page carries a year the function returns None
+    and `ballclubz_results()` returns nothing with a `::warning::`, losing a
+    signal rather than inventing one.
+
+All of these were checked against the committed capture and against a
 simulated 2027 run: today's output is byte-identical (0 failures, 36
 warnings, 27-14, 41 games, `SEED_CHANGED=no`); a 2027 seed that would have
 produced 75 failures and exit 1 now passes; a genuine 2027 misdating is still
@@ -379,17 +466,32 @@ caught; and a capture with no dated page warns instead of failing.
 5. **`verify-seed.py`'s `systemic` flag has an operator-precedence bug.**
    `len(over) >= 3 and bool(uncorroborated) or bool(uncorroborated)` reduces to
    `bool(uncorroborated)`, so the documented "3 or more drifted players"
-   threshold is dead. One misdated game produces ~33 failure lines instead of
-   2, burying the real finding.
+   threshold is dead. **The precedence is genuinely wrong; the consequence
+   this entry used to claim is not.** It said one misdated game produces ~33
+   failure lines instead of 2. On today's seed `over` holds 12 players, so the
+   dead branch `len(over) >= 3` is satisfied anyway — fixing the precedence
+   changes nothing about what a misdated game prints right now. The bug is
+   real and worth fixing, but it is latent: it only bites on a seed where
+   fewer than three players have drifted.
 6. **`canonical()` calls `.title()`**, which mangles intercapital surnames
    (`McMillan` -> `Mcmillan`). The mismatch is silent — the player is just
-   skipped — so "19 official batters checked" overstates real coverage, which
-   is 17 of 24. The highest-AB batter on the roster is currently never
-   cross-checked.
+   skipped — so the summary's "19 official batters checked" overstates it:
+   **17 are actually compared, of the 19 parsed.** (Not "17 of 24": the 24 is
+   the roster, and five of those have no batting lines in the seed and are not
+   on the official page at all, so they were never candidates. Comparing a
+   count of parsed identities against a roster size was mixing denominators.)
+   The highest-AB batter on the roster is currently never cross-checked.
 7. **The scraper's shortfall guard double-counts gated games.**
    `reached = boxOk + gated`, but `gated` is already inside `boxOk`. The guard
    over-reports what was reached in exactly the situation the gating counter
-   was added for. That path has never fired, so it is wholly untested.
+   was added for. **The guard itself has fired and worked** — on 20 Oct 2026,
+   the day after it was added, catching the redirect incident; the marker is
+   committed at `a78d96e` reading *reached 36 of 41*. What has never been
+   exercised is specifically the `gated > 0` arithmetic, because that run
+   recorded `login-gated: 0` and at zero the double-count is invisible. An
+   earlier version of this entry said "that path has never fired", which reads
+   as the whole guard being untested and would send someone to the wrong
+   conclusion about whether it works.
 8. **Pitching decisions are matched by surname**, so a pitcher listed twice in
    one table gets the decision twice. This is live in the seed: 2026-07-04 and
    2026-07-31 both have an opposing starter appearing twice.
@@ -408,9 +510,19 @@ caught; and a capture with no dated page warns instead of failing.
     GitHub's *floating* latest-release pointer, not a fixed tag. Any new
     non-prerelease release silently redirects every installed app's feed.
     Mark anything else as a pre-release.
-12. **`docs/sw.js` caches the dashboard under a hand-maintained
+12. ~~**`docs/sw.js` caches the dashboard under a hand-maintained
     `VERSION = "v1"`.** Change the page without bumping it and home-screen
-    installs keep the old shell. The Pages workflow will not catch this.
+    installs keep the old shell.~~ **This entry was wrong.** The service
+    worker is built not to behave that way and says so in its own header
+    comment: `index.html` and the data feed are **network-first**, falling
+    back to cache only when the network cannot answer, and the same-origin
+    request is rebuilt as `new Request(url.href, { cache: "reload" })`
+    specifically to bypass the browser's own HTTP cache. Only `.png`, `.svg`
+    and `manifest.json` are cache-first. So a page change reaches home-screen
+    installs on the next online load without touching `VERSION`. Bumping
+    `VERSION` drops every previously cached response on activate, which is
+    the lever for the icons and the manifest — the things that genuinely
+    would stick.
 13. **`.build-outputs/app-debug.apk`** is an 18 MB APK committed at the root
     commit, not gitignored, refreshed by nothing. It is neither the current
     build nor the v1-stable one. Do not ship it.
@@ -441,6 +553,20 @@ caught; and a capture with no dated page warns instead of failing.
     `update-seed.py` elsewhere and it finds no capture, swallows the
     `FileNotFoundError`s and exits 0 with `SEED_CHANGED=no` — indistinguishable
     from a successful no-op.
+20. **No workflow has a `pull_request` trigger, so a PR runs no tests.** §10
+    tells you to develop on a branch and open a pull request; the tests first
+    run on the push to `main` that follows the merge. The branch protection
+    you would expect to be there is not.
+21. **The two icon scripts need Pillow, which nothing declares or installs.**
+    `make-launcher-icons.py` and `make-web-icons.py` import PIL; there is no
+    `requirements.txt` and no install step, so on a clean checkout they fail
+    with `ModuleNotFoundError`. No workflow runs them, which is why it has
+    gone unnoticed.
+22. **`StandingsStore` reads a `standings` array nothing has ever written**
+    (see §2). Not a defect in itself — the league publishes no table and the
+    code is waiting for one — but it means the Standings tab has only ever
+    shown the derived per-opponent record, and anyone reading the schema
+    would not know that.
 
 ## 8. TODO, in priority order
 
@@ -471,9 +597,11 @@ caught; and a capture with no dated page warns instead of failing.
    roughly March and May 2027 the team site will list the 2027 schedule while
    no 2027 game has been played, so `season_year()` returns `2027` and
    `in_season()` excludes **every game in the seed**. Work out what that
-   leaves: `seed_w`/`seed_l` at 0-0, an empty `agg`, and a per-player
-   comparison against a `ballclubz-stats.txt` that may still hold 2026
-   totals. Two questions, in this order:
+   leaves: `seed_w`/`seed_l` at 0-0 and an empty `agg`. Note what that means
+   for the per-player loop — it does `a = agg.get(j)` then `if not a:
+   continue`, so with `agg` empty **every official batter is skipped and no
+   comparison happens at all.** Not a flood of spurious warnings: silence.
+   That is the shape of the real risk here. Two questions, in this order:
 
    - **Does it exit 1?** A failure stops the pipeline shipping any seed, and
      at four runs a day it fires repeatedly into an empty off-season.
@@ -546,13 +674,22 @@ Android is intended to be indistinguishable. The application id, the signing
 key, `kc_diamonds.db`, its schema version and the sync's stored settings are
 all unchanged, so it installs as an update and keeps its data.
 
-**Two things a reviewer should know:**
+**Three things a reviewer should know:**
 
-- **Landscape on a phone is genuinely different.** From 600dp the app moves
-  the tabs to a left rail and opens a player or game beside the list. An
-  ordinary phone in landscape exceeds that. This is the layout the iPhone
-  needs, but it is a visible change to Android and was flagged as a decision,
-  not an oversight.
+- **Landscape on a phone is genuinely different — and there are two
+  thresholds, not one.** At **600dp** the tabs move from a bottom bar to a
+  left rail. A player or game opens *beside* the list only once there is
+  741dp to the right of the 80dp rail, i.e. a window around **821dp**.
+  Between the two, a reviewer gets the rail while the detail still covers the
+  list, exactly as on a phone today. An ordinary phone in landscape clears
+  600dp but usually not 821dp, so what most Android users would actually see
+  is the rail alone. This is the layout the iPhone needs, but it is a visible
+  change to Android and was flagged as a decision, not an oversight.
+- **The app gains a rollback guard it does not have today** —
+  `Seeder.olderThan()`, described in §5. `main` has no seed-versus-feed
+  comparison at all, so this is new behaviour arriving with the conversion
+  rather than a port, and it is the second thing on this branch that changes
+  what an installed phone does.
 - **Android-only APIs had to be replaced** — `org.json`, `String.format`,
   `MessageDigest` and OkHttp, plus `SimpleDateFormat` and `SharedPreferences`
   once the code moved into `shared/`. **Three of the six ship with a test**
@@ -571,9 +708,15 @@ in that file; none of their values appear anywhere in the repo.
 ### `claude/kc-diamonds-stats-app-r7de5h` — dead history, do not push
 
 `git merge-base` against `main` returns **nothing**: the two share no ancestry
-at all. `main` is a 70-commit history beginning 17 Sep 2026; this branch is
-the original 29-commit history from "Initial commit" on 23 May, ending 18 Jul.
-Diffed against `main` it is roughly 17,600 lines *behind*, not ahead.
+at all. `main`'s own history begins **17 Sep 2026**; this branch is the
+original **29-commit** history from "Initial commit" on 23 May, ending 18 Jul,
+and diffed against `main` it is many thousands of lines *behind*, not ahead.
+
+No commit count or line delta is given for `main` on purpose. This paragraph
+used to say "a 70-commit history" and "roughly 17,600 lines" — both true when
+written and both stale within a fortnight, because `main` moves. Re-derive
+them if you need them: `git rev-list --count origin/main` and
+`git diff --shortstat origin/main...origin/claude/kc-diamonds-stats-app-r7de5h`.
 
 It is a frozen archive of the pre-September app, superseded wholesale. It
 cannot be merged and must not be pushed to. Keep it or delete it, but do not
@@ -598,13 +741,19 @@ try to reconcile it.
   version of this bullet said: that the discrepancy was "real and explicable."
   It is real and **unexplained**. The explanation offered in §3 was wrong, and
   writing *explicable* closed a question that is still open.
-- **Check this file against the code before trusting it.** In November 2026,
-  fact-checking the documentation turned up five errors in it, every one
-  plausible and every one written from recollection rather than from the
-  repository: the opposing-batting-line count (§7 item 16), a rollback guard
-  described as shipping behaviour when it exists only on a branch (§5), a
-  claim that every ported API had a comparison test when half do not (§9), the
-  26-13 explanation above, and a branch table that had gone stale. Numbers
-  here are countable and claims about behaviour are greppable. Count and grep
-  them. A handoff document is trusted by definition, which is precisely what
-  makes a wrong one expensive.
+- **Check this file against the code before trusting it.** In November 2026 it
+  was fact-checked against the repository for the first time. The first pass,
+  which only examined passages that something else happened to quote, found
+  five errors. A second pass that swept every section found **twenty more**,
+  including a documented `standings` array the artifact has never contained, a
+  "never overwrites" guarantee with two exceptions, a known-bug entry
+  describing the opposite of what the service worker does, and a **fourth
+  dated 2027 breakage** sitting in the same script as the three that had just
+  been declared fixed.
+
+  Every one was plausible. Every one was written from recollection about
+  something the repository could have answered in a single command. Numbers
+  here are countable and claims about behaviour are greppable — so count and
+  grep them. A handoff document is trusted by definition, which is exactly
+  what makes a wrong one expensive, and the errors clustered in the passages
+  nobody had cause to re-read.
