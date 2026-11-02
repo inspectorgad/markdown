@@ -132,11 +132,28 @@ pages are JavaScript-rendered.
 warnings**, and that is the healthy steady state. The warnings are permanent,
 not a backlog:
 
-> The official aggregate page appears to count the regular season only. It
-> reads 26-13 where the seed correctly reads 27-14, and the same exclusion
-> makes about twenty per-player totals read as over-counts. Every game in the
-> seed is corroborated by the published schedule, so the seed is right and the
-> aggregate page is narrower. **Only a verify-seed *failure* is an alert.**
+> The seed reads 27-14 where the official aggregate page reads 26-13, and 31
+> per-player totals across 12 players read as over-counts against it. Every
+> game in the seed is corroborated game by game against the published
+> schedule, so the seed is right. **Only a verify-seed *failure* is an alert.**
+
+**Why the aggregate page is two games short has not been established**, and an
+earlier version of this file asserted an explanation that does not survive
+arithmetic. It said the page counts the regular season only. It may well, but
+that is not what accounts for the gap: the seed's postseason rows are **2-2**,
+so removing them gives **25-12**, not 26-13. The difference is one win and one
+loss that the season split does not explain.
+
+`verify-seed.py` is more careful than any prose yet written about it — its own
+warning says only that the aggregate page is *behind*. Treat this as an open
+question and apply the rule in §10: when two sources disagree, find out why
+rather than picking one. That rule is in this file because it has paid for
+itself on the data; it applies to this file too.
+
+One practical note while reading a run: only the first 20 warnings print, while
+the summary counts all of them (§7 item 9). Sixteen of those 31 over-count
+lines reach the CI log; the other **fifteen are invisible there**. Lift the cap
+locally before concluding anything from what a run printed.
 
 ---
 
@@ -196,12 +213,22 @@ outright.
 **The seed is gap-filled, never replaced.** The whole point is that a correction
 typed in by hand survives.
 
-**An older bundled seed must not roll back newer synced data.** An APK carries
-whatever data was current when it was built. Installed over a phone that has
-since synced something newer, it would otherwise roll the standings back on
-every launch. `Seeder.olderThan()` compares the two `generatedAt` stamps and
-holds the bundled copy back — but only when both stamps are readable, because
-holding back on a guess would strand a phone with no data at all.
+**An older bundled seed must not roll back newer synced data — but this guard
+is not in the shipping app.** An APK carries whatever data was current when it
+was built. Installed over a phone that has since synced something newer, it
+would otherwise roll the standings back on every launch. `Seeder.olderThan()`
+compares the two `generatedAt` stamps and holds the bundled copy back — but
+only when both stamps are readable, because holding back on a guess would
+strand a phone with no data at all.
+
+**Read that as a design intention, not as current behaviour.** `olderThan()`
+does not exist on `main` and never has: `Seeder.sync()` there reads the bundled
+asset and goes straight to `merge()` with no stamp comparison at all. The
+function is new in `9eb571e` on `claude/kmp-ios-app`. So the conversion *adds*
+protection Android does not have today, which makes it a deliberate behaviour
+change a reviewer should sign off (see §9) rather than a port of something
+existing. An earlier version of this file described it as live behaviour of the
+installed app, which it is not.
 
 **The scrape dropped to weekly for the off-season.** Six-hourly collection
 exists to put a weekend result in the app the same evening. There are no
@@ -396,10 +423,15 @@ caught; and a capture with no dated page warns instead of failing.
 15. **The batting aggregation exists twice** — `stats/BattingStats.kt` and
     again in JavaScript inside `docs/index.html` — with nothing checking that
     the two agree. The dashboard has no tests of any kind.
-16. **The pitching data has no consumer.** 81 KC pitching rows, 110 opposing
-    pitching rows and 429 opposing batting lines are collected, checksummed
-    and verified on every run, and neither the app nor the dashboard reads any
-    of it.
+16. **Three of the four box-score arrays have no consumer.** 372 opposing
+    batting rows, 81 KC pitching rows and 110 opposing pitching rows — **563
+    rows in all** — are collected, checksummed and verified on every run, and
+    neither the app nor the dashboard reads any of them. The fourth array,
+    KC's own **429** batting lines, is the app's primary data and *is* read on
+    every launch. An earlier version of this entry gave 429 as the *opposing*
+    count, which both overstated the dead weight and swept the app's own data
+    into a tally of things nothing reads. Count them from `seed.json` before
+    quoting any of these figures again.
 17. **`actions/checkout@v4` and `actions/setup-node@v4`** warn about Node 20
     deprecation on every run.
 18. **The scrape cannot be tested locally.** The sites are unreachable from a
@@ -484,12 +516,19 @@ caught; and a capture with no dated page warns instead of failing.
 
 | Branch | Merged into `main`? | Status |
 | --- | --- | --- |
-| `claude/pitching-parser` | **Yes** | Done. Safe to delete. |
+| `claude/handoff-claude-md` | **Yes** — PR #1, 1 Nov | Produced this file. Safe to delete. |
+| `claude/pitching-parser` | **Yes** — fast-forwarded 13 Oct, no merge commit | Done. Safe to delete. |
 | `claude/kmp-ios-app` | **No** — 7 commits ahead | Live work. See below. |
+| `claude/session-archive` | **No** | A narrative archive of the session that built this project. Documentation, no code. |
 | `claude/kc-diamonds-stats-app-r7de5h` | **No — and it never can be** | Dead history. See below. |
 
 One further `claude/` branch in this repository belongs to a different app
 entirely and is not part of this project.
+
+**`git branch -r` is the authority here, not this table.** Short-lived branches
+for documentation fixes come and go, so a count written down in a file goes
+stale the next time anyone opens one — which is exactly how the previous
+version of this table came to be wrong.
 
 ### `claude/kmp-ios-app` — unmerged, and the thing to decide
 
@@ -515,9 +554,14 @@ all unchanged, so it installs as an update and keeps its data.
   needs, but it is a visible change to Android and was flagged as a decision,
   not an oversight.
 - **Android-only APIs had to be replaced** — `org.json`, `String.format`,
-  `MessageDigest`, OkHttp. Each replacement ships with a test comparing it
-  against the Android API it stands in for, because a wrong rounding or a
-  wrong hash is a silent wrong number rather than a crash.
+  `MessageDigest` and OkHttp, plus `SimpleDateFormat` and `SharedPreferences`
+  once the code moved into `shared/`. **Three of the six ship with a test**
+  comparing the replacement against the Android API it stands in for —
+  `JsonCompatTest`, `NumbersTest` and `Sha256Test` — because a wrong rounding
+  or a wrong hash is a silent wrong number rather than a crash. The HTTP, date
+  and settings replacements have **no such test**, and that is the gap to close
+  before this branch merges. An earlier version of this file claimed every
+  replacement had one.
 
 `ios/APPLE-SETUP.md` on that branch documents the Apple and GitHub setup. The
 TestFlight pipeline uses **cloud signing**: no certificate or provisioning
@@ -548,6 +592,19 @@ try to reconcile it.
   parser and re-run.
 - **Kick a scrape** by appending a line to `scrape-trigger.txt` and pushing.
 - **When two sources disagree, find out why** rather than picking one. That
-  rule has paid for itself more than once here — the 27-14 versus 26-13
-  discrepancy in §3 turned out to be real and explicable, and "fixing" it
-  would have corrupted a correct seed.
+  rule has paid for itself more than once here. The 27-14 versus 26-13
+  discrepancy in §3 is real and the seed is the correct side of it — "fixing"
+  the seed to match would have corrupted good data. But note what an earlier
+  version of this bullet said: that the discrepancy was "real and explicable."
+  It is real and **unexplained**. The explanation offered in §3 was wrong, and
+  writing *explicable* closed a question that is still open.
+- **Check this file against the code before trusting it.** In November 2026,
+  fact-checking the documentation turned up five errors in it, every one
+  plausible and every one written from recollection rather than from the
+  repository: the opposing-batting-line count (§7 item 16), a rollback guard
+  described as shipping behaviour when it exists only on a branch (§5), a
+  claim that every ported API had a comparison test when half do not (§9), the
+  26-13 explanation above, and a branch table that had gone stale. Numbers
+  here are countable and claims about behaviour are greppable. Count and grep
+  them. A handoff document is trusted by definition, which is precisely what
+  makes a wrong one expensive.
