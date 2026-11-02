@@ -132,11 +132,24 @@ pages are JavaScript-rendered.
 warnings**, and that is the healthy steady state. The warnings are permanent,
 not a backlog:
 
-> The official aggregate page appears to count the regular season only. It
-> reads 26-13 where the seed correctly reads 27-14, and the same exclusion
-> makes about twenty per-player totals read as over-counts. Every game in the
-> seed is corroborated by the published schedule, so the seed is right and the
-> aggregate page is narrower. **Only a verify-seed *failure* is an alert.**
+> The official aggregate page reads 26-13 where the seed reads 27-14, and
+> 31 per-player figures across 12 players read as over-counts. Every game in
+> the seed is corroborated by the published schedule, so the seed is right
+> and the aggregate page is short. **Only a verify-seed *failure* is an
+> alert.**
+
+**Why the page is short is not known.** An earlier version of this file said
+the page counts the regular season only. The arithmetic rules that out: the
+seed's regular season alone is 25-12, and its four scored postseason games are
+2-2. The page is the regular season plus exactly one win and one loss, and any
+win–loss pair of the four postseason results (L 5-6, W 4-3, W 8-2, L 7-8)
+would produce that. The per-player gaps could narrow it down; nobody has done
+that yet. `verify-seed.py`'s own warning says only that the page is "simply
+behind", which claims less and is the safer reading.
+
+Only 16 of the 31 over-count lines appear in a CI log, because of the
+`warnings[:20]` cap (§7 item 9). Lift the cap in a scratch copy to see them
+all.
 
 ---
 
@@ -196,12 +209,16 @@ outright.
 **The seed is gap-filled, never replaced.** The whole point is that a correction
 typed in by hand survives.
 
-**An older bundled seed must not roll back newer synced data.** An APK carries
-whatever data was current when it was built. Installed over a phone that has
-since synced something newer, it would otherwise roll the standings back on
-every launch. `Seeder.olderThan()` compares the two `generatedAt` stamps and
-holds the bundled copy back — but only when both stamps are readable, because
-holding back on a guess would strand a phone with no data at all.
+**An older bundled seed must not roll back newer synced data — and on `main`,
+nothing yet stops it.** An APK carries whatever data was current when it was
+built. Installed over a phone that has since synced something newer, it would
+otherwise roll the standings back on every launch. The guard,
+`Seeder.olderThan()`, exists **only on the unmerged `claude/kmp-ios-app`
+branch** (added in `9eb571e`, tested by `SeederStampTest`). It compares the two
+`generatedAt` stamps and holds the bundled copy back, but only when both stamps
+are readable, because holding back on a guess would strand a phone with no data
+at all. The app built from `main` has no such check. An earlier version of this
+file described it as shipping behaviour.
 
 **The scrape dropped to weekly for the off-season.** Six-hourly collection
 exists to put a weekend result in the app the same evening. There are no
@@ -367,6 +384,7 @@ caught; and a capture with no dated page warns instead of failing.
    one table gets the decision twice. This is live in the seed: 2026-07-04 and
    2026-07-31 both have an opposing starter appearing twice.
 9. **Only the first 20 warnings print**, while the summary counts all of them.
+   Right now that hides 15 of the 31 over-count lines (§3).
    A new warning class landing after position 20 is invisible in CI logs.
 
 ### Traps in the build and release machinery
@@ -397,9 +415,10 @@ caught; and a capture with no dated page warns instead of failing.
     again in JavaScript inside `docs/index.html` — with nothing checking that
     the two agree. The dashboard has no tests of any kind.
 16. **The pitching data has no consumer.** 81 KC pitching rows, 110 opposing
-    pitching rows and 429 opposing batting lines are collected, checksummed
-    and verified on every run, and neither the app nor the dashboard reads any
-    of it.
+    pitching rows and 372 opposing batting lines (563 rows in all) are
+    collected, checksummed and verified on every run, and neither the app nor
+    the dashboard reads any of it. (An earlier version of this file said 429,
+    but that is the count of `lines`, KC's own batting, which the app reads.)
 17. **`actions/checkout@v4` and `actions/setup-node@v4`** warn about Node 20
     deprecation on every run.
 18. **The scrape cannot be tested locally.** The sites are unreachable from a
@@ -485,11 +504,13 @@ caught; and a capture with no dated page warns instead of failing.
 | Branch | Merged into `main`? | Status |
 | --- | --- | --- |
 | `claude/pitching-parser` | **Yes** | Done. Safe to delete. |
+| `claude/handoff-claude-md` | **Yes** — merged as PR #1 | Done. Safe to delete. |
 | `claude/kmp-ios-app` | **No** — 7 commits ahead | Live work. See below. |
+| `claude/session-archive` | **No — and not meant to be** | Holds a session archive (`SESSION-ARCHIVE-2026-11-02.md`): the history behind this file. Reference only; keep it out of `main`. |
 | `claude/kc-diamonds-stats-app-r7de5h` | **No — and it never can be** | Dead history. See below. |
 
-One further `claude/` branch in this repository belongs to a different app
-entirely and is not part of this project.
+One further `claude/` branch, `claude/ku-volleyball-app-feasibility-c4se1m`,
+belongs to a different app entirely and is not part of this project.
 
 ### `claude/kmp-ios-app` — unmerged, and the thing to decide
 
@@ -514,10 +535,17 @@ all unchanged, so it installs as an update and keeps its data.
   ordinary phone in landscape exceeds that. This is the layout the iPhone
   needs, but it is a visible change to Android and was flagged as a decision,
   not an oversight.
-- **Android-only APIs had to be replaced** — `org.json`, `String.format`,
-  `MessageDigest`, OkHttp. Each replacement ships with a test comparing it
-  against the Android API it stands in for, because a wrong rounding or a
-  wrong hash is a silent wrong number rather than a crash.
+- **Android-only APIs had to be replaced or hidden behind an interface.**
+  Six of them: `org.json`, `String.format`, `MessageDigest`, OkHttp,
+  `SimpleDateFormat` and `SharedPreferences`. **Only three have a test**
+  comparing the replacement against the Android API it stands in for:
+  `JsonCompatTest` (`org.json`), `NumbersTest` (`String.format`) and
+  `Sha256Test` (`MessageDigest`). Those are the ones where a wrong rounding or a
+  wrong hash would be a silent wrong number rather than a crash. The other
+  three have no comparison test. HTTP (`platform/Http.kt`) still uses OkHttp on
+  Android and `NSURLSession` on iOS. Today's date (`text/Dates.kt`) moved to
+  kotlinx-datetime. Settings (`platform/Device.kt`) wrap `SharedPreferences` on
+  Android. An earlier version of this file said every replacement was tested.
 
 `ios/APPLE-SETUP.md` on that branch documents the Apple and GitHub setup. The
 TestFlight pipeline uses **cloud signing**: no certificate or provisioning
@@ -548,6 +576,8 @@ try to reconcile it.
   parser and re-run.
 - **Kick a scrape** by appending a line to `scrape-trigger.txt` and pushing.
 - **When two sources disagree, find out why** rather than picking one. That
-  rule has paid for itself more than once here — the 27-14 versus 26-13
-  discrepancy in §3 turned out to be real and explicable, and "fixing" it
-  would have corrupted a correct seed.
+  rule has paid for itself more than once here. It also applies to this file:
+  the 27-14 versus 26-13 discrepancy in §3 was once written up as explained
+  when it was not. It is real, the seed is right game by game, and "fixing" the
+  seed to match would corrupt it. But why the page is short is still an open
+  question (§3).
